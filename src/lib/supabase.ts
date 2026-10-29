@@ -690,13 +690,14 @@ export const db = {
       const { data, error } = await supabase
         .from('subscriptions')
         .select('*, payment_source:payment_sources(*)')
+        .eq('user_id', userId)
         .order('created_at', { ascending: false });
       if (!error && data) return data as Subscription[];
     }
     const all = getFromStorage<Subscription[]>('subscriptions', INITIAL_SUBSCRIPTIONS);
     const sources = getFromStorage<PaymentSource[]>('payment_sources', INITIAL_PAYMENT_SOURCES);
     return all
-      .filter(s => s.user_id === userId || s.user_id === 'default-user')
+      .filter(s => s.user_id === userId || (userId === 'default-user' || userId === 'demo-user-123' ? s.user_id === 'default-user' : false))
       .map(s => ({
         ...s,
         payment_source: sources.find(p => p.id === s.payment_source_id),
@@ -764,11 +765,12 @@ export const db = {
       const { data, error } = await supabase
         .from('payment_sources')
         .select('*')
+        .eq('user_id', userId)
         .order('display_name', { ascending: true });
       if (!error && data) return data as PaymentSource[];
     }
     const all = getFromStorage<PaymentSource[]>('payment_sources', INITIAL_PAYMENT_SOURCES);
-    return all.filter(p => p.user_id === userId || p.user_id === 'default-user');
+    return all.filter(p => p.user_id === userId || (userId === 'default-user' || userId === 'demo-user-123' ? p.user_id === 'default-user' : false));
   },
 
   async createPaymentSource(source: Omit<PaymentSource, 'id' | 'created_at' | 'updated_at'>): Promise<PaymentSource> {
@@ -801,15 +803,18 @@ export const db = {
       const { data, error } = await supabase
         .from('reminders')
         .select('*, subscription:subscriptions(*)')
+        .eq('user_id', userId)
         .order('scheduled_at', { ascending: true });
       if (!error && data) return data as Reminder[];
     }
     const all = getFromStorage<Reminder[]>('reminders', INITIAL_REMINDERS);
     const subs = await this.getSubscriptions(userId);
-    return all.map(r => ({
-      ...r,
-      subscription: subs.find(s => s.id === r.subscription_id),
-    }));
+    return all
+      .filter(r => r.user_id === userId || (userId === 'default-user' || userId === 'demo-user-123' ? r.user_id === 'default-user' : false))
+      .map(r => ({
+        ...r,
+        subscription: subs.find(s => s.id === r.subscription_id),
+      }));
   },
 
   async createReminder(reminder: Omit<Reminder, 'id' | 'created_at' | 'updated_at'>): Promise<Reminder> {
@@ -873,10 +878,12 @@ export const db = {
       const { data, error } = await supabase
         .from('cancellation_guidance_history')
         .select('*')
+        .eq('user_id', userId)
         .order('created_at', { ascending: false });
       if (!error && data) return data as CancellationGuidanceHistory[];
     }
-    return getFromStorage<CancellationGuidanceHistory[]>('guidance_history', INITIAL_GUIDANCE_HISTORY);
+    const all = getFromStorage<CancellationGuidanceHistory[]>('guidance_history', []);
+    return all.filter(h => h.user_id === userId || (userId === 'default-user' || userId === 'demo-user-123' ? h.user_id === 'default-user' : false));
   },
 
   async logCancellationAction(action: Omit<CancellationGuidanceHistory, 'id' | 'created_at'>): Promise<CancellationGuidanceHistory> {
@@ -895,7 +902,7 @@ export const db = {
       if (!error && data) return data as CancellationGuidanceHistory;
     }
 
-    const list = getFromStorage<CancellationGuidanceHistory[]>('guidance_history', INITIAL_GUIDANCE_HISTORY);
+    const list = getFromStorage<CancellationGuidanceHistory[]>('guidance_history', []);
     list.unshift(item);
     saveToStorage('guidance_history', list);
     return item;

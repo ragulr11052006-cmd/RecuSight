@@ -12,7 +12,7 @@ interface AuthContextType {
     displayName?: string
   ) => Promise<{ error: Error | null; needsEmailConfirmation?: boolean }>;
   signInWithPhone: (phone: string) => Promise<{ error: Error | null }>;
-  verifyPhoneOtp: (phone: string, token: string) => Promise<{ error: Error | null }>;
+  verifyPhoneOtp: (phone: string, token: string, displayName?: string) => Promise<{ error: Error | null }>;
   signInWithOAuth: (
     provider: 'google' | 'apple' | 'azure' | 'microsoft',
     accountDetails?: { name: string; email: string }
@@ -250,13 +250,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const verifyPhoneOtp = async (phone: string, token: string) => {
+  const verifyPhoneOtp = async (phone: string, token: string, displayName?: string) => {
     try {
       const normalizedPhone = phone.replace(/[^\d+]/g, '');
+      const cleanDigits = normalizedPhone.replace(/\D/g, '');
+      const resolvedDisplayName = displayName?.trim() || (cleanDigits.length >= 10 ? `User (+91 ${cleanDigits.slice(-10)})` : `User (${cleanDigits})`);
+
       if (isSupabaseConfigured && supabase) {
         const { data, error } = await supabase.auth.verifyOtp({ phone: normalizedPhone, token, type: 'sms' });
         if (!error && data.user) {
+          if (displayName?.trim()) {
+            await supabase.auth.updateUser({
+              data: { full_name: displayName.trim() },
+            });
+          }
           const profile = await mapSupabaseUserToProfile(data.user);
+          if (displayName?.trim()) {
+            profile.display_name = displayName.trim();
+          }
           setUser(profile);
           return { error: null };
         }
@@ -266,9 +277,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (token.length === 6) {
           console.warn('Authenticating test session for phone:', normalizedPhone);
           const localProfile: UserProfile = {
-            id: 'usr-' + normalizedPhone.replace(/\D/g, ''),
-            email: `${normalizedPhone.replace(/\D/g, '')}@recusight.local`,
-            display_name: 'Hendry Sujon',
+            id: 'usr-' + cleanDigits,
+            email: `${cleanDigits}@recusight.local`,
+            display_name: resolvedDisplayName,
             preferred_currency: 'INR',
             timezone: 'Asia/Kolkata',
             theme_preference: 'light',
@@ -290,8 +301,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       const localProfile: UserProfile = {
-        ...DEMO_USER,
+        id: 'usr-' + (cleanDigits || Date.now()),
+        email: `${cleanDigits || 'user'}@recusight.local`,
+        display_name: resolvedDisplayName,
+        preferred_currency: 'INR',
+        timezone: 'Asia/Kolkata',
+        theme_preference: 'light',
         phone_number: phone,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       };
       setUser(localProfile);
       localStorage.setItem('recusight_auth_user', JSON.stringify(localProfile));
@@ -306,12 +324,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     accountDetails?: { name: string; email: string }
   ) => {
     try {
-      // Instant development authentication for social login
       const providerCapitalized = provider.charAt(0).toUpperCase() + provider.slice(1);
       const socialProfile: UserProfile = {
         id: `usr-${provider.toLowerCase()}-${Date.now()}`,
-        email: accountDetails?.email || `hendry.${provider.toLowerCase()}@recusight.com`,
-        display_name: accountDetails?.name || `Hendry Sujon (${providerCapitalized})`,
+        email: accountDetails?.email || `user.${provider.toLowerCase()}@recusight.com`,
+        display_name: accountDetails?.name || (accountDetails?.email ? accountDetails.email.split('@')[0] : `User (${providerCapitalized})`),
         preferred_currency: 'INR',
         timezone: 'Asia/Kolkata',
         theme_preference: 'light',

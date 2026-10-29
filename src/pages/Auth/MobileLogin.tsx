@@ -19,6 +19,7 @@ export const MobileLogin: React.FC = () => {
 
   // Step 1: 'enter_phone', Step 2: 'enter_otp'
   const [step, setStep] = useState<'enter_phone' | 'enter_otp'>('enter_phone');
+  const [fullName, setFullName] = useState('');
   const [countryCode, setCountryCode] = useState('+91');
   const [isCountryDropdownOpen, setIsCountryDropdownOpen] = useState(false);
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -111,7 +112,7 @@ export const MobileLogin: React.FC = () => {
     setErrorMessage(null);
     setLoading(true);
     const fullPhone = `${countryCode} ${phoneNumber.replace(/\s+/g, '')}`;
-    const { error } = await verifyPhoneOtp(fullPhone, token);
+    const { error } = await verifyPhoneOtp(fullPhone, token, fullName);
     setLoading(false);
 
     if (error) {
@@ -246,6 +247,19 @@ export const MobileLogin: React.FC = () => {
             {/* ========================================================= */}
             {step === 'enter_phone' ? (
               <form onSubmit={handleSendOtp} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    Your Name <span className="text-slate-400 font-normal text-[11px]">(Optional — shown on your dashboard)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder="e.g. Yashwanth"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-[#F8FAFC] text-xs font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#2446D8]/20 focus:border-[#2446D8] transition-all"
+                  />
+                </div>
+
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1.5">
                     Mobile Number

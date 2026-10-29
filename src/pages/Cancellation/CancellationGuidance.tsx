@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { db } from '../../lib/supabase';
+import { Subscription, CancellationGuidanceHistory } from '../../types';
 import { formatCurrencyAmount } from '../../lib/currency';
 import { MerchantLogo } from '../../components/common/MerchantLogo';
 import {
@@ -17,106 +19,113 @@ import {
   Check,
   X,
   Plus,
+  Loader2,
 } from 'lucide-react';
-
-interface VendorShortcut {
-  name: string;
-  category: string;
-  amount: number;
-  cancelUrl: string;
-}
 
 export const CancellationGuidance: React.FC = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const serviceParam = searchParams.get('service');
 
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+  const [history, setHistory] = useState<CancellationGuidanceHistory[]>([]);
+  const [loading, setLoading] = useState(true);
+
   // Modal State for App Hub or Manual Log
   const [activeHubModal, setActiveHubModal] = useState<string | null>(null);
+  const [selectedSubForRevoke, setSelectedSubForRevoke] = useState<Subscription | null>(null);
   const [notificationMsg, setNotificationMsg] = useState<string | null>(null);
 
-  const VENDOR_SHORTCUTS: VendorShortcut[] = [
-    {
-      name: 'Netflix',
-      category: 'Streaming Plan',
-      amount: 19.99,
-      cancelUrl: 'https://www.netflix.com/youraccount',
-    },
-    {
-      name: 'Adobe Creative Cloud',
-      category: 'Annual Contract',
-      amount: 54.99,
-      cancelUrl: 'https://account.adobe.com/plans',
-    },
-    {
-      name: 'Spotify Premium',
-      category: 'Music Streaming',
-      amount: 10.99,
-      cancelUrl: 'https://www.spotify.com/account/change-plan/',
-    },
-    {
-      name: 'Canva Pro',
-      category: 'Graphic Design',
-      amount: 12.99,
-      cancelUrl: 'https://www.canva.com/settings/billing',
-    },
-    {
-      name: 'Amazon Prime',
-      category: 'Shopping & Video',
-      amount: 14.99,
-      cancelUrl: 'https://www.amazon.com/mc/manage',
-    },
-    {
-      name: 'YouTube Premium',
-      category: 'Ad-free & Music',
-      amount: 13.99,
-      cancelUrl: 'https://www.youtube.com/paid_memberships',
-    },
-  ];
+  useEffect(() => {
+    loadData();
+  }, [user]);
 
-  const LOGGED_HISTORY = [
-    {
-      initial: 'S',
-      color: 'bg-emerald-50 text-emerald-700',
-      name: 'Spotify Individual',
-      subtitle: 'Vendor Direct Cancellation • Completed Oct 24, 2026',
-      badge: 'Confirmed at Bank',
-      badgeType: 'confirmed',
-    },
-    {
-      initial: 'F',
-      color: 'bg-emerald-50 text-emerald-700',
-      name: 'FitnessFirst Gold',
-      subtitle: 'UPI AutoPay Mandate Revocation • Completed Oct 22, 2026',
-      badge: 'Mandate Inactive',
-      badgeType: 'inactive',
-    },
-    {
-      initial: 'in',
-      color: 'bg-blue-50 text-blue-700',
-      name: 'LinkedIn Career',
-      subtitle: 'Vendor Billing Paused (60 Days) • Completed Oct 18, 2026',
-      badge: 'Paused',
-      badgeType: 'paused',
-    },
-    {
-      initial: 'H',
-      color: 'bg-red-50 text-red-600',
-      name: 'Hulu Basic',
-      subtitle: 'Vendor Direct Cancellation • Completed Oct 02, 2026',
-      badge: 'Confirmed at Bank',
-      badgeType: 'confirmed',
-    },
-  ];
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [subs, hist] = await Promise.all([
+        db.getSubscriptions(user?.id || 'default-user'),
+        db.getCancellationHistory(user?.id || 'default-user'),
+      ]);
+      setSubscriptions(subs);
+      setHistory(hist);
+    } catch (err) {
+      console.error('Failed to load cancellation guidance data:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const handleOpenCancel = (vendor: VendorShortcut) => {
-    window.open(vendor.cancelUrl, '_blank', 'noopener,noreferrer');
-    setNotificationMsg(`Opened verified vendor cancellation portal for ${vendor.name}`);
+  const getMerchantCancelUrl = (sub: Subscription): string => {
+    if (sub.cancellation_url) return sub.cancellation_url;
+    const lower = sub.merchant_name.toLowerCase();
+    if (lower.includes('netflix')) return 'https://www.netflix.com/youraccount';
+    if (lower.includes('adobe')) return 'https://account.adobe.com/plans';
+    if (lower.includes('spotify')) return 'https://www.spotify.com/account/change-plan/';
+    if (lower.includes('canva')) return 'https://www.canva.com/settings/billing';
+    if (lower.includes('amazon') || lower.includes('prime')) return 'https://www.amazon.com/mc/manage';
+    if (lower.includes('youtube')) return 'https://www.youtube.com/paid_memberships';
+    if (lower.includes('notion')) return 'https://www.notion.so/settings';
+    if (lower.includes('perplexity')) return 'https://www.perplexity.ai/settings';
+    if (lower.includes('apple') || lower.includes('icloud')) return 'https://support.apple.com/billing';
+    if (lower.includes('google') || lower.includes('cloud')) return 'https://play.google.com/store/account/subscriptions';
+    if (sub.website_url) return sub.website_url;
+    return `https://www.google.com/search?q=how+to+cancel+${encodeURIComponent(sub.merchant_name)}+subscription`;
+  };
+
+  const handleOpenCancel = async (sub: Subscription) => {
+    const cancelUrl = getMerchantCancelUrl(sub);
+    window.open(cancelUrl, '_blank', 'noopener,noreferrer');
+    setNotificationMsg(`Opened verified vendor cancellation portal for ${sub.merchant_name}`);
+
+    try {
+      const logged = await db.logCancellationAction({
+        user_id: user?.id || 'default-user',
+        subscription_id: sub.id,
+        merchant_name: sub.merchant_name,
+        action_type: 'cancel_vendor',
+        status: 'guidance_viewed',
+        notes: `Opened verified direct vendor cancellation portal (${cancelUrl})`,
+      });
+      setHistory((prev) => [logged, ...prev]);
+    } catch (err) {
+      console.error('Error logging cancellation action:', err);
+    }
+
     setTimeout(() => setNotificationMsg(null), 4000);
   };
 
-  const handleOpenRevoke = (vendor: VendorShortcut) => {
-    setActiveHubModal(vendor.name);
+  const handleOpenRevoke = (sub: Subscription) => {
+    setSelectedSubForRevoke(sub);
+    setActiveHubModal(sub.merchant_name);
+  };
+
+  const handleConfirmRevocation = async () => {
+    if (selectedSubForRevoke) {
+      const merchantName = selectedSubForRevoke.merchant_name;
+      try {
+        const logged = await db.logCancellationAction({
+          user_id: user?.id || 'default-user',
+          subscription_id: selectedSubForRevoke.id,
+          merchant_name: merchantName,
+          action_type: 'revoke_autopay',
+          status: 'mandate_revocation_marked',
+          notes: `Marked AutoPay mandate revoked for ${merchantName}`,
+          confirmation_reference: `REV-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+        });
+        setHistory((prev) => [logged, ...prev]);
+        setNotificationMsg(`AutoPay mandate revocation confirmed & recorded for ${merchantName}.`);
+      } catch (err) {
+        console.error('Error recording mandate revocation:', err);
+      }
+    } else if (activeHubModal) {
+      setNotificationMsg(`Revocation instructions for ${activeHubModal} acknowledged.`);
+    }
+
+    setActiveHubModal(null);
+    setSelectedSubForRevoke(null);
+    setTimeout(() => setNotificationMsg(null), 4000);
   };
 
   return (
@@ -377,55 +386,86 @@ export const CancellationGuidance: React.FC = () => {
             Select an App to Get Instant Instructions
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            Pick common recurring subscriptions to view verified direct cancellation URLs or mandate revocation guides.
+            Pick your active recurring subscriptions to view verified direct cancellation URLs or mandate revocation guides.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {VENDOR_SHORTCUTS.map((vendor) => (
-            <div
-              key={vendor.name}
-              className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col justify-between hover:border-slate-300 transition-all"
+        {loading ? (
+          <div className="p-8 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-center flex items-center justify-center gap-2 text-xs text-slate-500">
+            <Loader2 className="w-4 h-4 animate-spin text-[#2446D8]" />
+            <span>Loading your subscriptions...</span>
+          </div>
+        ) : subscriptions.length === 0 ? (
+          <div className="p-10 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-center flex flex-col items-center justify-center">
+            <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mb-3">
+              <Ban className="w-6 h-6" />
+            </div>
+            <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 mb-1">
+              No Active Subscriptions Found
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mb-4">
+              You haven't added any subscriptions yet. Once you add or import subscriptions, they will appear here with direct cancellation links and AutoPay revocation playbooks.
+            </p>
+            <button
+              type="button"
+              onClick={() => navigate('/subscriptions/new')}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#2446D8] hover:bg-blue-700 text-white text-xs font-bold transition shadow-xs"
             >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <MerchantLogo name={vendor.name} size="md" />
-                  <div>
-                    <h3 className="font-bold text-xs text-slate-900 dark:text-white">
-                      {vendor.name}
-                    </h3>
-                    <span className="text-[11px] text-slate-400 block">{vendor.category}</span>
+              <Plus className="w-4 h-4" />
+              <span>Add Subscription</span>
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {subscriptions.map((sub) => (
+              <div
+                key={sub.id}
+                className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col justify-between hover:border-slate-300 transition-all"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <MerchantLogo name={sub.merchant_name} size="md" />
+                    <div>
+                      <h3 className="font-bold text-xs text-slate-900 dark:text-white">
+                        {sub.merchant_name}
+                      </h3>
+                      <span className="text-[11px] text-slate-400 block">{sub.category}</span>
+                    </div>
                   </div>
+
+                  <span className="text-xs font-bold text-slate-900 dark:text-white">
+                    {formatCurrencyAmount(
+                      sub.amount,
+                      user?.preferred_currency || sub.currency || 'INR',
+                      sub.currency || 'INR'
+                    )}/{sub.billing_interval_unit === 'years' ? 'yr' : 'mo'}
+                  </span>
                 </div>
 
-                <span className="text-xs font-bold text-slate-900 dark:text-white">
-                  {formatCurrencyAmount(vendor.amount, user?.preferred_currency || 'USD', 'USD')}/mo
-                </span>
-              </div>
+                {/* Action Buttons */}
+                <div className="flex items-center gap-2 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => handleOpenCancel(sub)}
+                    className="flex-1 py-1.5 px-2.5 rounded-lg bg-[#8B1A1A] hover:bg-[#741515] text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-colors shadow-2xs"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>Cancel Vendor</span>
+                  </button>
 
-              {/* Action Buttons matching Screenshot 1 */}
-              <div className="flex items-center gap-2 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => handleOpenCancel(vendor)}
-                  className="flex-1 py-1.5 px-2.5 rounded-lg bg-[#8B1A1A] hover:bg-[#741515] text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-colors shadow-2xs"
-                >
-                  <ExternalLink className="w-3.5 h-3.5" />
-                  <span>Cancel Vendor</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleOpenRevoke(vendor)}
-                  className="flex-1 py-1.5 px-2.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
-                >
-                  <Ban className="w-3.5 h-3.5 text-teal-600" />
-                  <span>Revoke AutoPay</span>
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => handleOpenRevoke(sub)}
+                    className="flex-1 py-1.5 px-2.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
+                  >
+                    <Ban className="w-3.5 h-3.5 text-teal-600" />
+                    <span>Revoke AutoPay</span>
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* ========================================================= */}
@@ -441,43 +481,86 @@ export const CancellationGuidance: React.FC = () => {
               Recently followed guides and completed revocation or cancellation actions.
             </p>
           </div>
-          <span className="text-xs font-semibold text-slate-400">4 Recent Entries</span>
+          <span className="text-xs font-semibold text-slate-400">
+            {history.length} {history.length === 1 ? 'Recent Entry' : 'Recent Entries'}
+          </span>
         </div>
 
-        <div className="space-y-3">
-          {LOGGED_HISTORY.map((item) => (
-            <div
-              key={item.name}
-              className="p-3 rounded-2xl hover:bg-slate-50/70 dark:hover:bg-slate-800/40 flex items-center justify-between transition-colors"
-            >
-              <div className="flex items-center gap-3.5">
+        {history.length === 0 ? (
+          <div className="p-8 text-center text-slate-400 text-xs py-8">
+            <Clock className="w-8 h-8 mx-auto mb-2 opacity-40 text-slate-400" />
+            <p className="font-semibold text-slate-600 dark:text-slate-300">No Guidance History Logged Yet</p>
+            <p className="text-[11px] text-slate-400 mt-1 max-w-sm mx-auto">
+              When you click cancellation links or revoke bank AutoPay mandates, your actions will be recorded here for your audit trail.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {history.map((item) => {
+              const formattedDate = new Date(item.created_at).toLocaleDateString(undefined, {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+              });
+              const isRevoke = item.action_type === 'revoke_autopay';
+              const isPause = item.action_type === 'pause_requested';
+              
+              let subtitle = `Vendor Direct Cancellation • Completed ${formattedDate}`;
+              if (isRevoke) {
+                subtitle = `UPI AutoPay Mandate Revocation • Completed ${formattedDate}`;
+              } else if (isPause) {
+                subtitle = `Vendor Billing Paused • Completed ${formattedDate}`;
+              } else if (item.status === 'guidance_viewed') {
+                subtitle = `Cancellation Guidance Viewed • ${formattedDate}`;
+              }
+
+              let badgeText = 'Confirmed at Bank';
+              let badgeStyle = 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900';
+              let BadgeIcon = CheckCircle2;
+              let iconColor = 'text-emerald-600';
+
+              if (item.status === 'mandate_revocation_marked') {
+                badgeText = 'Mandate Inactive';
+              } else if (isPause) {
+                badgeText = 'Paused';
+                badgeStyle = 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300 border-blue-200 dark:border-blue-900';
+                BadgeIcon = Clock;
+                iconColor = 'text-blue-600';
+              } else if (item.status === 'guidance_viewed') {
+                badgeText = 'Guidance Opened';
+                badgeStyle = 'bg-slate-50 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700';
+                BadgeIcon = ExternalLink;
+                iconColor = 'text-slate-500';
+              }
+
+              const initial = item.merchant_name?.charAt(0).toUpperCase() || 'S';
+
+              return (
                 <div
-                  className={`w-9 h-9 rounded-xl font-black text-sm flex items-center justify-center ${item.color}`}
+                  key={item.id}
+                  className="p-3 rounded-2xl hover:bg-slate-50/70 dark:hover:bg-slate-800/40 flex items-center justify-between transition-colors border border-transparent hover:border-slate-100 dark:hover:border-slate-800"
                 >
-                  {item.initial}
-                </div>
-                <div>
-                  <h3 className="font-bold text-xs text-slate-900 dark:text-white">
-                    {item.name}
-                  </h3>
-                  <p className="text-[11px] text-slate-400 mt-0.5">{item.subtitle}</p>
-                </div>
-              </div>
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-9 h-9 rounded-xl font-black text-sm flex items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                      {initial}
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-xs text-slate-900 dark:text-white">
+                        {item.merchant_name}
+                      </h3>
+                      <p className="text-[11px] text-slate-400 mt-0.5">{subtitle}</p>
+                    </div>
+                  </div>
 
-              {item.badgeType === 'paused' ? (
-                <span className="px-3 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300 border border-blue-200 dark:border-blue-900 flex items-center gap-1.5">
-                  <Clock className="w-3 h-3 text-blue-600" />
-                  <span>{item.badge}</span>
-                </span>
-              ) : (
-                <span className="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900 flex items-center gap-1.5">
-                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                  <span>{item.badge}</span>
-                </span>
-              )}
-            </div>
-          ))}
-        </div>
+                  <span className={`px-3 py-1 rounded-full text-xs font-semibold border flex items-center gap-1.5 ${badgeStyle}`}>
+                    <BadgeIcon className={`w-3 h-3 ${iconColor}`} />
+                    <span>{badgeText}</span>
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* MODAL: AutoPay Revocation Guidance for App */}
@@ -489,7 +572,10 @@ export const CancellationGuidance: React.FC = () => {
                 Revoke Mandate: {activeHubModal}
               </h3>
               <button
-                onClick={() => setActiveHubModal(null)}
+                onClick={() => {
+                  setActiveHubModal(null);
+                  setSelectedSubForRevoke(null);
+                }}
                 className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-white"
               >
                 <X className="w-4 h-4" />
@@ -514,12 +600,8 @@ export const CancellationGuidance: React.FC = () => {
               <div className="pt-3">
                 <button
                   type="button"
-                  onClick={() => {
-                    setActiveHubModal(null);
-                    setNotificationMsg(`Revocation instructions for ${activeHubModal} recorded.`);
-                    setTimeout(() => setNotificationMsg(null), 4000);
-                  }}
-                  className="w-full py-2.5 rounded-xl bg-[#2446D8] text-white font-bold hover:bg-blue-700"
+                  onClick={handleConfirmRevocation}
+                  className="w-full py-2.5 rounded-xl bg-[#2446D8] text-white font-bold hover:bg-blue-700 transition"
                 >
                   Understood & Mark Revoked
                 </button>

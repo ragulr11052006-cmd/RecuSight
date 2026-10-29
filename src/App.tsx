@@ -6,7 +6,6 @@ import { AppShell } from './components/layout/AppShell';
 
 // Auth Pages
 import { Login } from './pages/Auth/Login';
-import { MobileLogin } from './pages/Auth/MobileLogin';
 import { SignUp } from './pages/Auth/SignUp';
 import { ForgotPassword } from './pages/Auth/ForgotPassword';
 
@@ -92,15 +91,7 @@ export const App: React.FC = () => {
               path="/login"
               element={
                 <PublicOnlyRoute>
-                  <MobileLogin />
-                </PublicOnlyRoute>
-              }
-            />
-            <Route
-              path="/login/mobile"
-              element={
-                <PublicOnlyRoute>
-                  <MobileLogin />
+                  <Login />
                 </PublicOnlyRoute>
               }
             />
@@ -112,6 +103,7 @@ export const App: React.FC = () => {
                 </PublicOnlyRoute>
               }
             />
+            <Route path="/login/mobile" element={<Navigate to="/login" replace />} />
             <Route
               path="/signup"
               element={

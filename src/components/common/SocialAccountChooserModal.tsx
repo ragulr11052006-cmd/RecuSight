@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { X, Check, Shield, User, Plus } from 'lucide-react';
+import { X, Check, Shield, User, Plus, ExternalLink } from 'lucide-react';
+import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 
 export interface SocialAccount {
   name: string;
@@ -23,31 +24,52 @@ export const SocialAccountChooserModal: React.FC<SocialAccountChooserModalProps>
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [appleEmailOption, setAppleEmailOption] = useState<'share' | 'hide'>('share');
+  const [showCustomInput, setShowCustomInput] = useState(false);
+  const [customName, setCustomName] = useState('');
+  const [customEmail, setCustomEmail] = useState('');
+  const [customAccounts, setCustomAccounts] = useState<SocialAccount[]>([]);
 
   if (!isOpen || !provider) return null;
 
   const accountsByProvider: Record<'google' | 'apple' | 'microsoft', SocialAccount[]> = {
     google: [
-      { name: 'Hendry Sujon', email: 'hendry.sujon@gmail.com', avatarColor: 'bg-blue-600' },
-      { name: 'Hendry (Work)', email: 'hendry.tech@fintechpro.in', avatarColor: 'bg-emerald-600' },
+      ...customAccounts,
+      { name: 'Yashwanth Chandran', email: 'yashwanthchandran@gmail.com', avatarColor: 'bg-blue-600' },
+      { name: 'Personal Google Account', email: 'yashwanth@gmail.com', avatarColor: 'bg-emerald-600' },
     ],
     microsoft: [
-      { name: 'Hendry Sujon', email: 'hendry.sujon@outlook.com', avatarColor: 'bg-sky-600' },
-      { name: 'Hendry Sujon (Corp)', email: 'hsujon@microsoft.enterprise.com', avatarColor: 'bg-indigo-600' },
+      ...customAccounts,
+      { name: 'Yashwanth (Outlook)', email: 'yashwanth@outlook.com', avatarColor: 'bg-sky-600' },
     ],
     apple: [
-      { name: 'Hendry Sujon', email: 'hendry.sujon@icloud.com', avatarColor: 'bg-slate-900' },
+      ...customAccounts,
+      { name: 'Yashwanth (Apple ID)', email: 'yashwanth@icloud.com', avatarColor: 'bg-slate-900' },
     ],
   };
 
   const accounts = accountsByProvider[provider] || accountsByProvider.google;
   const activeAccount = accounts[selectedIdx] || accounts[0];
 
+  const handleAddCustomAccount = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!customEmail.trim()) return;
+    const newAcc: SocialAccount = {
+      name: customName.trim() || customEmail.split('@')[0],
+      email: customEmail.trim(),
+      avatarColor: 'bg-[#2446D8]',
+    };
+    setCustomAccounts([newAcc, ...customAccounts]);
+    setSelectedIdx(0);
+    setShowCustomInput(false);
+    setCustomName('');
+    setCustomEmail('');
+  };
+
   const handleConfirm = async () => {
     setIsSubmitting(true);
     const emailToUse =
       provider === 'apple' && appleEmailOption === 'hide'
-        ? `hsujon.privaterelay@appleid.com`
+        ? `yashwanth.privaterelay@appleid.com`
         : activeAccount.email;
 
     await onConfirm({
@@ -56,6 +78,24 @@ export const SocialAccountChooserModal: React.FC<SocialAccountChooserModalProps>
       provider,
     });
     setIsSubmitting(false);
+  };
+
+  const handleDirectOAuth = async () => {
+    if (isSupabaseConfigured && supabase) {
+      setIsSubmitting(true);
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: provider === 'microsoft' ? 'azure' : (provider || 'google'),
+        options: {
+          redirectTo: window.location.origin + '/overview',
+        },
+      });
+      if (error) {
+        alert(`Supabase OAuth notice: ${error.message}\n\nPlease ensure ${provider} provider is enabled in your Supabase Dashboard ➔ Authentication ➔ Providers.`);
+        setIsSubmitting(false);
+      }
+    } else {
+      alert('Supabase credentials (VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY) are not configured yet in this environment.');
+    }
   };
 
   return (
@@ -169,15 +209,51 @@ export const SocialAccountChooserModal: React.FC<SocialAccountChooserModalProps>
               );
             })}
 
-            {/* Add another account button (mock) */}
-            <button
-              type="button"
-              onClick={() => setSelectedIdx(0)}
-              className="w-full p-2.5 rounded-xl border border-dashed border-slate-300 hover:border-slate-400 hover:bg-slate-50 text-slate-600 flex items-center justify-center gap-2 text-xs font-semibold transition-colors"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Use another account</span>
-            </button>
+            {/* Add custom account form or button */}
+            {showCustomInput ? (
+              <form onSubmit={handleAddCustomAccount} className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-2 animate-in fade-in">
+                <span className="text-[11px] font-bold text-slate-700 block">Add your account:</span>
+                <input
+                  type="text"
+                  placeholder="Your Name (e.g. Yashwanth)"
+                  value={customName}
+                  onChange={(e) => setCustomName(e.target.value)}
+                  className="w-full px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-[#2446D8]"
+                />
+                <input
+                  type="email"
+                  required
+                  placeholder="Your Email (e.g. yashwanthchandran@gmail.com)"
+                  value={customEmail}
+                  onChange={(e) => setCustomEmail(e.target.value)}
+                  className="w-full px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-[#2446D8]"
+                />
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    type="submit"
+                    className="flex-1 py-1.5 rounded-lg bg-[#2446D8] text-white text-xs font-bold hover:bg-blue-700 transition-colors"
+                  >
+                    Select this Account
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowCustomInput(false)}
+                    className="py-1.5 px-3 rounded-lg border border-slate-200 text-slate-600 text-xs hover:bg-slate-100"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowCustomInput(true)}
+                className="w-full p-2.5 rounded-xl border border-dashed border-slate-300 hover:border-slate-400 hover:bg-slate-50 text-slate-600 flex items-center justify-center gap-2 text-xs font-semibold transition-colors cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>+ Use another account (Enter your custom name & email)</span>
+              </button>
+            )}
           </div>
 
           {/* Apple ID Privacy Option */}
@@ -219,6 +295,18 @@ export const SocialAccountChooserModal: React.FC<SocialAccountChooserModalProps>
             <span>
               To continue, {provider === 'google' ? 'Google' : provider === 'apple' ? 'Apple' : 'Microsoft'} will share your name and email with RecurSight.
             </span>
+          </div>
+
+          {/* Official Provider Redirect Button */}
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={handleDirectOAuth}
+              className="w-full py-2 px-3 rounded-xl border border-slate-200 hover:bg-slate-50 text-[11px] font-semibold text-slate-600 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
+              <span>Or redirect to official {provider === 'google' ? 'Google' : provider === 'apple' ? 'Apple' : 'Microsoft'} OAuth login</span>
+            </button>
           </div>
         </div>
 

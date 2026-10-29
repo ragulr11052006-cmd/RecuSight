@@ -7,7 +7,6 @@ import {
   Lock,
   Eye,
   EyeOff,
-  Smartphone,
   AlertCircle,
   CheckCircle2,
   AtSign,
@@ -24,7 +23,7 @@ export const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successNotice, setSuccessNotice] = useState<string | null>(null);
-  const [socialModalProvider, setSocialModalProvider] = useState<'google' | 'apple' | 'microsoft' | null>(null);
+  const [socialModalProvider, setSocialModalProvider] = useState<'google' | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,7 +59,7 @@ export const Login: React.FC = () => {
     }
   };
 
-  const handleSocialClick = (provider: 'google' | 'apple' | 'microsoft') => {
+  const handleSocialClick = (provider: 'google' = 'google') => {
     setSocialModalProvider(provider);
   };
 
@@ -108,27 +107,8 @@ export const Login: React.FC = () => {
                 Sign In
               </h1>
               <p className="text-xs text-slate-500 mt-1">
-                Choose your login method to access your subscriptions
+                Enter your email and password to access your subscriptions
               </p>
-            </div>
-
-            {/* Segmented Method Switcher Pill */}
-            <div className="flex rounded-xl bg-[#F0F4FA] p-1 mb-6 border border-slate-100">
-              <button
-                type="button"
-                className="flex-1 py-2 rounded-lg bg-white text-xs font-bold text-slate-900 shadow-xs flex items-center justify-center gap-2 transition-all"
-              >
-                <Mail className="w-4 h-4 text-[#2446D8]" />
-                <span>Email</span>
-              </button>
-              
-              <NavLink
-                to="/login"
-                className="flex-1 py-2 rounded-lg text-xs font-medium text-slate-500 hover:text-slate-800 flex items-center justify-center gap-2 transition-all"
-              >
-                <Smartphone className="w-4 h-4 text-slate-500" />
-                <span>Mobile Number</span>
-              </NavLink>
             </div>
 
             {/* Error Message */}
@@ -271,66 +251,36 @@ export const Login: React.FC = () => {
                 <div className="w-full border-t border-slate-100" />
               </div>
               <div className="relative flex justify-center text-[10px] uppercase font-bold tracking-wider text-slate-400">
-                <span className="bg-white px-3">OR SIGN IN WITH</span>
+                <span className="bg-white px-3">OR</span>
               </div>
             </div>
 
-            {/* Social Logins: Google, Microsoft, Apple */}
-            <div className="flex items-center justify-center gap-3">
-              {/* Google */}
-              <button
-                type="button"
-                onClick={() => handleSocialClick('google')}
-                className="w-11 h-11 rounded-xl border border-slate-200 hover:bg-slate-50 flex items-center justify-center transition-colors shadow-2xs cursor-pointer"
-                title="Sign in with Google"
-              >
-                <svg className="w-4 h-4" viewBox="0 0 24 24">
-                  <path
-                    fill="#EA4335"
-                    d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.7 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.4 9 5 12 5z"
-                  />
-                  <path
-                    fill="#4285F4"
-                    d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.8z"
-                  />
-                  <path
-                    fill="#FBBC05"
-                    d="M5.6 14.8c-.2-.7-.4-1.5-.4-2.3s.2-1.6.4-2.3L1.9 7.3C.7 9.7 0 12.3 0 15.2s.7 5.5 1.9 7.9l3.7-2.9z"
-                  />
-                  <path
-                    fill="#34A853"
-                    d="M12 23.5c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2.4-6.4-5.2L1.9 16.5C3.7 20.2 7.5 23.5 12 23.5z"
-                  />
-                </svg>
-              </button>
-
-              {/* Microsoft */}
-              <button
-                type="button"
-                onClick={() => handleSocialClick('microsoft')}
-                className="w-11 h-11 rounded-xl border border-slate-200 hover:bg-slate-50 flex items-center justify-center transition-colors shadow-2xs cursor-pointer"
-                title="Sign in with Microsoft"
-              >
-                <svg className="w-4 h-4" viewBox="0 0 23 23">
-                  <path fill="#f35325" d="M1 1h10v10H1z" />
-                  <path fill="#81bc06" d="M12 1h10v10H12z" />
-                  <path fill="#05a6f0" d="M1 12h10v10H1z" />
-                  <path fill="#ffba08" d="M12 12h10v10H12z" />
-                </svg>
-              </button>
-
-              {/* Apple */}
-              <button
-                type="button"
-                onClick={() => handleSocialClick('apple')}
-                className="w-11 h-11 rounded-xl border border-slate-200 hover:bg-slate-50 flex items-center justify-center transition-colors shadow-2xs cursor-pointer"
-                title="Sign in with Apple"
-              >
-                <svg className="w-4 h-4 fill-slate-900" viewBox="0 0 170 170">
-                  <path d="M150.37 130.25c-2.45 5.66-5.35 10.87-8.71 15.66-4.58 6.53-8.33 11.05-11.22 13.56-4.48 4.12-9.28 6.23-14.42 6.35-3.69 0-8.14-1.05-13.32-3.18-5.19-2.12-9.97-3.17-14.34-3.17-4.58 0-9.49 1.05-14.75 3.17-5.26 2.13-9.5 3.24-12.74 3.35-4.35.13-9.16-1.9-14.42-6.08-3.69-3.04-7.6-7.85-11.75-14.42-6-9.5-10.59-20.08-13.78-31.74-3.19-11.66-4.78-22.84-4.78-33.55 0-14.18 3.52-26.06 10.57-35.63 7.05-9.57 16.02-14.47 26.9-14.7 4.93 0 10.22 1.3 15.87 3.89 5.65 2.6 9.4 3.95 11.25 4.07 1.48-.12 5.48-1.54 12-4.26 6.52-2.72 12.03-3.86 16.54-3.41 12.28.61 22.06 5.09 29.33 13.43-10.74 6.52-16 15.48-15.79 26.88.22 8.92 3.63 16.32 10.23 22.21 6.6 5.89 14.52 9.28 23.76 10.17-2.17 6.74-4.78 13.04-7.82 18.91zM119.22 33.15c0-7.39 2.6-14.07 7.82-20.04 5.21-5.97 11.6-9.67 19.16-11.11.22 1.09.33 2.17.33 3.26 0 7.39-2.72 14.18-8.15 20.37-5.43 6.19-11.95 9.78-19.16 10.76v-3.24z" />
-                </svg>
-              </button>
-            </div>
+            {/* Google Only Social Login Button */}
+            <button
+              type="button"
+              onClick={() => handleSocialClick('google')}
+              className="w-full py-2.5 px-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-bold text-slate-700 shadow-2xs flex items-center justify-center gap-2.5 transition-all cursor-pointer hover:border-slate-300"
+            >
+              <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                <path
+                  fill="#EA4335"
+                  d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.7 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.4 9 5 12 5z"
+                />
+                <path
+                  fill="#4285F4"
+                  d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.8z"
+                />
+                <path
+                  fill="#FBBC05"
+                  d="M5.6 14.8c-.2-.7-.4-1.5-.4-2.3s.2-1.6.4-2.3L1.9 7.3C.7 9.7 0 12.3 0 15.2s.7 5.5 1.9 7.9l3.7-2.9z"
+                />
+                <path
+                  fill="#34A853"
+                  d="M12 23.5c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2.4-6.4-5.2L1.9 16.5C3.7 20.2 7.5 23.5 12 23.5z"
+                />
+              </svg>
+              <span>Continue with Google</span>
+            </button>
 
             {/* Account Chooser Confirmation Modal */}
             <SocialAccountChooserModal

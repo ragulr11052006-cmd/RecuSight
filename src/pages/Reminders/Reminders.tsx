@@ -70,6 +70,11 @@ export const Reminders: React.FC = () => {
     message: string;
   } | null>(null);
 
+  // Filter confirmed vs unconfirmed subscriptions
+  const scheduledSubscriptions = subscriptions.filter(s => Boolean(s.next_billing_date));
+  const unconfirmedSubs = subscriptions.filter(s => !s.next_billing_date || s.status === 'needs_review');
+  const allScheduledCount = reminders.filter(r => r.status === 'scheduled').length + scheduledSubscriptions.length;
+
   useEffect(() => {
     loadData();
   }, [user]);
@@ -210,7 +215,7 @@ export const Reminders: React.FC = () => {
               : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50'
           }`}
         >
-          All Reminders <span className="ml-1 opacity-90">{reminders.length}</span>
+          All Reminders <span className="ml-1 opacity-90">{allScheduledCount}</span>
         </button>
 
         <button
@@ -223,7 +228,7 @@ export const Reminders: React.FC = () => {
           }`}
         >
           <span className="w-2 h-2 rounded-full bg-[#2446D8]" />
-          <span>Scheduled {reminders.filter(r => r.status === 'scheduled').length}</span>
+          <span>Scheduled {allScheduledCount}</span>
         </button>
 
         <button
@@ -249,7 +254,7 @@ export const Reminders: React.FC = () => {
           }`}
         >
           <span className="w-4 h-4 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center text-[10px] font-black">?</span>
-          <span>Cannot Schedule {subscriptions.filter(s => !s.next_billing_date || s.status === 'needs_review').length || 1}</span>
+          <span>Cannot Schedule {unconfirmedSubs.length}</span>
         </button>
       </div>
 
@@ -278,195 +283,142 @@ export const Reminders: React.FC = () => {
               </span>
             </div>
 
-            {/* List of Scheduled Items matching Screenshot */}
+            {/* List of Scheduled Items matching real subscriptions */}
             <div className="space-y-6">
-              
-              {/* ITEM 1: Adobe Creative Cloud */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-xs font-bold text-slate-900 dark:text-white">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-[#2446D8]" />
-                    <span>Tomorrow • 9:00 AM EST</span>
+              {allScheduledCount === 0 ? (
+                <div className="py-12 px-4 text-center space-y-3">
+                  <div className="w-12 h-12 rounded-2xl bg-blue-50 dark:bg-blue-950/40 text-[#2446D8] flex items-center justify-center mx-auto">
+                    <Bell className="w-6 h-6" />
                   </div>
-                  <span className="text-[11px] font-normal text-slate-400">24 hours prior</span>
+                  <div className="space-y-1">
+                    <h3 className="font-bold text-sm text-slate-800 dark:text-slate-200">
+                      No Reminders Scheduled
+                    </h3>
+                    <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                      You have no active subscriptions or reminders. Add your subscriptions to schedule automated renewal reminders before bank debits occur.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/subscriptions/new')}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#2446D8] hover:bg-blue-700 text-white font-bold text-xs shadow-xs transition-colors cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Add Subscription</span>
+                  </button>
                 </div>
-
-                <div className="p-4 rounded-2xl bg-[#F8FAFC] dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 flex items-center justify-between hover:border-slate-200 dark:hover:border-slate-700 transition-all">
-                  <div className="flex items-center gap-3.5">
-                    <MerchantLogo name="Adobe Creative Cloud" size="md" />
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-sm text-slate-900 dark:text-white">
-                          Adobe Creative Cloud
-                        </span>
-                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A]">
-                          Trial Expire Soon
+              ) : (
+                scheduledSubscriptions.map((sub) => {
+                  const daysUntil = sub.next_billing_date
+                    ? Math.ceil((new Date(sub.next_billing_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+                    : 0;
+                  return (
+                    <div key={sub.id} className="space-y-2">
+                      <div className="flex items-center justify-between text-xs font-bold text-slate-900 dark:text-white">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-[#2446D8]" />
+                          <span>{sub.next_billing_date} • 9:00 AM</span>
+                        </div>
+                        <span className="text-[11px] font-normal text-slate-400">
+                          {daysUntil > 0 ? `${daysUntil} days prior` : 'Renewal due soon'}
                         </span>
                       </div>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                        Recurring commitment: {formatCurrencyAmount(54.99, user?.preferred_currency || 'USD', 'USD')}/mo starting Nov 1, 2024
-                      </p>
-                      <div className="flex items-center gap-2 text-[11px] text-slate-400 mt-2">
-                        <span className="flex items-center gap-1">
-                          <Mail className="w-3.5 h-3.5 text-slate-500" />
-                          <span>Email</span>
-                        </span>
-                        <span>+</span>
-                        <span className="flex items-center gap-1">
-                          <Monitor className="w-3.5 h-3.5 text-slate-500" />
-                          <span>In-Dashboard</span>
-                        </span>
+
+                      <div className="p-4 rounded-2xl bg-[#F8FAFC] dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 flex items-center justify-between hover:border-slate-200 dark:hover:border-slate-700 transition-all">
+                        <div className="flex items-center gap-3.5">
+                          <MerchantLogo name={sub.merchant_name} size="md" />
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-sm text-slate-900 dark:text-white">
+                                {sub.merchant_name}
+                              </span>
+                              {sub.status === 'trial' ? (
+                                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A]">
+                                  Trial Expire Soon
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#EEF2FF] text-[#2446D8] border border-blue-100">
+                                  Renewal Notice
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                              Recurring commitment: {formatCurrencyAmount(sub.amount, user?.preferred_currency || 'INR', sub.currency)}/mo
+                            </p>
+                            <div className="flex items-center gap-2 text-[11px] text-slate-400 mt-2">
+                              <span className="flex items-center gap-1">
+                                <Mail className="w-3.5 h-3.5 text-slate-500" />
+                                <span>Email</span>
+                              </span>
+                              <span>+</span>
+                              <span className="flex items-center gap-1">
+                                <Monitor className="w-3.5 h-3.5 text-slate-500" />
+                                <span>In-Dashboard</span>
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col items-end gap-3 shrink-0 ml-3">
+                          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#EEF2FF] text-[#2446D8] font-bold text-xs">
+                            <Calendar className="w-3.5 h-3.5" />
+                            <span>Scheduled</span>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-
-                  <div className="flex flex-col items-end gap-3 shrink-0 ml-3">
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#EEF2FF] text-[#2446D8] font-bold text-xs">
-                      <Calendar className="w-3.5 h-3.5" />
-                      <span>Scheduled</span>
-                    </div>
-                    <div className="flex items-center gap-1 text-slate-400">
-                      <button
-                        type="button"
-                        onClick={() => setShowRulesModal(true)}
-                        className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-700 transition-colors"
-                        title="Edit schedule"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setDiagnosticAlert({
-                            show: true,
-                            channel: 'Alert Status',
-                            message: 'Adobe Creative Cloud reminder muted for next billing cycle.',
-                          });
-                          setTimeout(() => setDiagnosticAlert(null), 4000);
-                        }}
-                        className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-700 transition-colors"
-                        title="Mute alert"
-                      >
-                        <BellOff className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* ITEM 2: Spotify Family Plan */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-xs font-bold text-slate-900 dark:text-white">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-[#2446D8]" />
-                    <span>Nov 2, 2024 • 9:00 AM EST</span>
-                  </div>
-                  <span className="text-[11px] font-normal text-slate-400">Standard 2-day lead</span>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-[#F8FAFC] dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 flex items-center justify-between hover:border-slate-200 dark:hover:border-slate-700 transition-all">
-                  <div className="flex items-center gap-3.5">
-                    <MerchantLogo name="Spotify Family" size="md" />
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-sm text-slate-900 dark:text-white">
-                          Spotify Family Plan
-                        </span>
-                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#F1EDFB] text-[#6B46C1] border border-purple-200">
-                          Renewal Notice
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                        Recurring commitment: {formatCurrencyAmount(19.99, user?.preferred_currency || 'USD', 'USD')}/mo • Card ending in 4102
-                      </p>
-                      <div className="flex items-center gap-1.5 text-[11px] text-slate-400 mt-2">
-                        <Mail className="w-3.5 h-3.5 text-slate-500" />
-                        <span>Email only</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col items-end gap-3 shrink-0 ml-3">
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#EEF2FF] text-[#2446D8] font-bold text-xs">
-                      <Calendar className="w-3.5 h-3.5" />
-                      <span>Scheduled</span>
-                    </div>
-                    <div className="flex items-center gap-1 text-slate-400">
-                      <button
-                        type="button"
-                        onClick={() => setShowRulesModal(true)}
-                        className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-700 transition-colors"
-                        title="Edit schedule"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setDiagnosticAlert({
-                            show: true,
-                            channel: 'Alert Status',
-                            message: 'Spotify Family Plan reminder muted.',
-                          });
-                          setTimeout(() => setDiagnosticAlert(null), 4000);
-                        }}
-                        className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-700 transition-colors"
-                        title="Mute alert"
-                      >
-                        <BellOff className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
+                  );
+                })
+              )}
             </div>
           </div>
 
           {/* CARD 2: Cannot Schedule Reminder (Lavender Box) */}
-          <div className="p-5 rounded-3xl bg-[#F8F7FF] dark:bg-purple-950/20 border border-purple-100 dark:border-purple-900/40 shadow-xs">
-            {/* Header */}
-            <div className="flex items-center justify-between pb-3.5 mb-3.5 border-b border-purple-100/80 dark:border-purple-900/30">
-              <div className="flex items-center gap-2">
-                <div className="w-5 h-5 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-xs">
-                  ?
+          {unconfirmedSubs.length > 0 && (
+            <div className="p-5 rounded-3xl bg-[#F8F7FF] dark:bg-purple-950/20 border border-purple-100 dark:border-purple-900/40 shadow-xs space-y-4">
+              <div className="flex items-center justify-between pb-3.5 border-b border-purple-100/80 dark:border-purple-900/30">
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-xs">
+                    ?
+                  </div>
+                  <h3 className="font-bold text-sm text-[#4338CA] dark:text-purple-300">
+                    Cannot Schedule Reminder
+                  </h3>
                 </div>
-                <h3 className="font-bold text-sm text-[#4338CA] dark:text-purple-300">
-                  Cannot Schedule Reminder
-                </h3>
-              </div>
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-white/90 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
-                Unconfirmed Date
-              </span>
-            </div>
-
-            {/* Content Row */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <MerchantLogo name="Notion" size="md" />
-                <div>
-                  <h4 className="font-bold text-xs text-slate-900 dark:text-white">
-                    Notion AI ({formatCurrencyAmount(8.00, user?.preferred_currency || 'USD', 'USD')}/mo)
-                  </h4>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 max-w-md">
-                    Third-party bank feed did not supply a confirmed cadence date for this account.
-                  </p>
-                </div>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-white/90 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                  Unconfirmed Date
+                </span>
               </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedSubForDate('Notion AI');
-                  setShowSetDateModal(true);
-                }}
-                className="px-3.5 py-2 rounded-xl bg-white dark:bg-slate-900 border border-purple-200 dark:border-purple-800 hover:bg-purple-50 dark:hover:bg-purple-950/40 text-[#2446D8] dark:text-blue-400 font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs shrink-0 transition-colors"
-              >
-                <Calendar className="w-3.5 h-3.5" />
-                <span>Set Date Manually</span>
-              </button>
+              {unconfirmedSubs.map(sub => (
+                <div key={sub.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <MerchantLogo name={sub.merchant_name} size="md" />
+                    <div>
+                      <h4 className="font-bold text-xs text-slate-900 dark:text-white">
+                        {sub.merchant_name} ({formatCurrencyAmount(sub.amount, user?.preferred_currency || 'INR', sub.currency)}/mo)
+                      </h4>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 max-w-md">
+                        Cadence date is unconfirmed. Set date manually to enable automated renewal reminders.
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedSubForDate(sub.merchant_name);
+                      setShowSetDateModal(true);
+                    }}
+                    className="px-3.5 py-2 rounded-xl bg-white dark:bg-slate-900 border border-purple-200 dark:border-purple-800 hover:bg-purple-50 dark:hover:bg-purple-950/40 text-[#2446D8] dark:text-blue-400 font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs shrink-0 transition-colors cursor-pointer"
+                  >
+                    <Calendar className="w-3.5 h-3.5" />
+                    <span>Set Date Manually</span>
+                  </button>
+                </div>
+              ))}
             </div>
-          </div>
+          )}
 
         </div>
 
