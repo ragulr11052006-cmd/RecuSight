@@ -235,9 +235,12 @@ export const AppShell: React.FC = () => {
             </div>
           </div>
           <button
-            onClick={() => signOut()}
+            onClick={async () => {
+              await signOut();
+              navigate('/login', { replace: true });
+            }}
             title="Sign Out"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors cursor-pointer"
           >
             <LogOut className="w-4 h-4" />
           </button>
@@ -433,11 +436,12 @@ export const AppShell: React.FC = () => {
                   </NavLink>
                   <div className="border-t border-slate-100 dark:border-slate-800 my-1" />
                   <button
-                    onClick={() => {
+                    onClick={async () => {
                       setUserDropdownOpen(false);
-                      signOut();
+                      await signOut();
+                      navigate('/login', { replace: true });
                     }}
-                    className="w-full text-left flex items-center gap-2 px-4 py-2 text-xs font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
+                    className="w-full text-left flex items-center gap-2 px-4 py-2 text-xs font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 cursor-pointer"
                   >
                     <LogOut className="w-4 h-4" />
                     Sign Out

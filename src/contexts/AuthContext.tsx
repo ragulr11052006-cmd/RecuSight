@@ -46,20 +46,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (isSupabaseConfigured && supabase) {
       supabase.auth.getSession().then(({ data: { session } }) => {
         if (session?.user) {
-          mapSupabaseUserToProfile(session.user).then(profile => {
-            setUser(profile);
-            setLoading(false);
-          });
+          mapSupabaseUserToProfile(session.user)
+            .then(profile => {
+              setUser(profile);
+              setLoading(false);
+            })
+            .catch(() => {
+              setUser({
+                id: session.user.id,
+                email: session.user.email || '',
+                display_name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'User',
+                preferred_currency: 'INR',
+                timezone: 'Asia/Kolkata',
+                theme_preference: 'light',
+                created_at: session.user.created_at || new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              });
+              setLoading(false);
+            });
         } else {
           setUser(null);
           setLoading(false);
         }
+      }).catch(() => {
+        setUser(null);
+        setLoading(false);
       });
 
       const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
         if (session?.user) {
-          const profile = await mapSupabaseUserToProfile(session.user);
-          setUser(profile);
+          try {
+            const profile = await mapSupabaseUserToProfile(session.user);
+            setUser(profile);
+          } catch {
+            setUser({
+              id: session.user.id,
+              email: session.user.email || '',
+              display_name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'User',
+              preferred_currency: 'INR',
+              timezone: 'Asia/Kolkata',
+              theme_preference: 'light',
+              created_at: session.user.created_at || new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            });
+          }
         } else {
           setUser(null);
         }
@@ -70,18 +100,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         authListener.subscription.unsubscribe();
       };
     } else {
-      // Offline / Local Demo mode
+      // Offline / Local fallback mode
       const savedUser = localStorage.getItem('recusight_auth_user');
       if (savedUser) {
         try {
           setUser(JSON.parse(savedUser));
         } catch {
-          setUser(DEMO_USER);
+          setUser(null);
         }
       } else {
-        // Initialize default session for demo/development
-        setUser(DEMO_USER);
-        localStorage.setItem('recusight_auth_user', JSON.stringify(DEMO_USER));
+        // Start unauthenticated so new visitors always land on the Login screen
+        setUser(null);
       }
       setLoading(false);
     }

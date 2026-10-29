@@ -19,7 +19,7 @@ import { CancellationGuidance } from './pages/Cancellation/CancellationGuidance'
 import { Settings } from './pages/Settings/Settings';
 import { HelpSupport } from './pages/Help/HelpSupport';
 
-// Route Protection Component
+// Route Protection Component: only authenticated users can access children
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
   const location = useLocation();
@@ -44,41 +44,104 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   return <>{children}</>;
 };
 
+// Public-only Route: redirects authenticated users away from auth pages to /overview
+const PublicOnlyRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
+        <div className="w-8 h-8 border-3 border-[#0030B2]/30 border-t-[#0030B2] rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (user) {
+    return <Navigate to="/overview" replace />;
+  }
+
+  return <>{children}</>;
+};
+
+// Root Route: sends authenticated users to /overview, unauthenticated users to /login
+const RootRedirect: React.FC = () => {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
+        <div className="w-8 h-8 border-3 border-[#0030B2]/30 border-t-[#0030B2] rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  return user ? <Navigate to="/overview" replace /> : <Navigate to="/login" replace />;
+};
+
 export const App: React.FC = () => {
   return (
     <ThemeProvider>
       <AuthProvider>
         <BrowserRouter>
           <Routes>
-            {/* Public Auth Routes - Default is Mobile Number Login */}
-            <Route path="/login" element={<MobileLogin />} />
-            <Route path="/login/mobile" element={<MobileLogin />} />
-            <Route path="/login/email" element={<Login />} />
-            <Route path="/signup" element={<SignUp />} />
+            {/* Root Route: strictly directs to /overview if authenticated, or /login if unauthenticated */}
+            <Route path="/" element={<RootRedirect />} />
+
+            {/* Public Auth Routes */}
+            <Route
+              path="/login"
+              element={
+                <PublicOnlyRoute>
+                  <MobileLogin />
+                </PublicOnlyRoute>
+              }
+            />
+            <Route
+              path="/login/mobile"
+              element={
+                <PublicOnlyRoute>
+                  <MobileLogin />
+                </PublicOnlyRoute>
+              }
+            />
+            <Route
+              path="/login/email"
+              element={
+                <PublicOnlyRoute>
+                  <Login />
+                </PublicOnlyRoute>
+              }
+            />
+            <Route
+              path="/signup"
+              element={
+                <PublicOnlyRoute>
+                  <SignUp />
+                </PublicOnlyRoute>
+              }
+            />
             <Route path="/forgot-password" element={<ForgotPassword />} />
 
             {/* Authenticated Application Shell */}
             <Route
-              path="/"
               element={
                 <ProtectedRoute>
                   <AppShell />
                 </ProtectedRoute>
               }
             >
-              <Route index element={<Navigate to="/overview" replace />} />
-              <Route path="overview" element={<Overview />} />
-              <Route path="subscriptions" element={<SubscriptionsList />} />
-              <Route path="subscriptions/new" element={<AddSubscriptionPage />} />
-              <Route path="subscriptions/upload" element={<AddSubscriptionPage />} />
-              <Route path="reminders" element={<Reminders />} />
-              <Route path="cancellation-guidance" element={<CancellationGuidance />} />
-              <Route path="settings" element={<Settings />} />
-              <Route path="help" element={<HelpSupport />} />
+              <Route path="/overview" element={<Overview />} />
+              <Route path="/subscriptions" element={<SubscriptionsList />} />
+              <Route path="/subscriptions/new" element={<AddSubscriptionPage />} />
+              <Route path="/subscriptions/upload" element={<AddSubscriptionPage />} />
+              <Route path="/reminders" element={<Reminders />} />
+              <Route path="/cancellation-guidance" element={<CancellationGuidance />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="/help" element={<HelpSupport />} />
             </Route>
 
-            {/* Fallback */}
-            <Route path="*" element={<Navigate to="/overview" replace />} />
+            {/* Fallback: any unknown route routes via RootRedirect */}
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>
       </AuthProvider>
