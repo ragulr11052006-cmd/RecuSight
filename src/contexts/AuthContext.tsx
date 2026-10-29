@@ -124,9 +124,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return {
       id: sbUser.id,
       email: sbUser.email || '',
-      display_name: sbUser.user_metadata?.full_name || sbUser.email?.split('@')[0] || 'User',
-      preferred_currency: 'USD',
-      timezone: 'UTC',
+      display_name: sbUser.user_metadata?.full_name || sbUser.user_metadata?.name || sbUser.email?.split('@')[0] || 'User',
+      avatar_url: sbUser.user_metadata?.avatar_url || sbUser.user_metadata?.picture,
+      preferred_currency: 'INR',
+      timezone: 'Asia/Kolkata',
       theme_preference: 'light',
       created_at: sbUser.created_at || new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -324,6 +325,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     accountDetails?: { name: string; email: string }
   ) => {
     try {
+      if (isSupabaseConfigured && supabase) {
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: provider === 'microsoft' ? 'azure' : provider,
+          options: {
+            redirectTo: `${window.location.origin}/overview`,
+            queryParams: {
+              access_type: 'offline',
+              prompt: 'consent',
+            },
+          },
+        });
+        if (error) return { error };
+        if (data?.url) {
+          window.location.href = data.url;
+        }
+        return { error: null };
+      }
+
+      // Offline / Local preview fallback
       const providerCapitalized = provider.charAt(0).toUpperCase() + provider.slice(1);
       const socialProfile: UserProfile = {
         id: `usr-${provider.toLowerCase()}-${Date.now()}`,

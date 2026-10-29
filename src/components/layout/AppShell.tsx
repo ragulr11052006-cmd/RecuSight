@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
+import { db } from '../../lib/supabase';
 import { CURRENCY_SYMBOLS, Currency } from '../../types';
 import { formatCurrencyAmount } from '../../lib/currency';
 import {
@@ -39,6 +40,53 @@ export const AppShell: React.FC = () => {
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [referralCopied, setReferralCopied] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+
+  interface AppNotification {
+    id: string;
+    title: string;
+    message: string;
+    type: 'warning' | 'info';
+  }
+
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+
+  useEffect(() => {
+    if (!user) {
+      setNotifications([]);
+      return;
+    }
+
+    const loadNotifications = async () => {
+      try {
+        const subs = await db.getSubscriptions(user.id);
+        const alerts: AppNotification[] = [];
+
+        subs.forEach((sub) => {
+          if (sub.status === 'trial') {
+            alerts.push({
+              id: `trial-${sub.id}`,
+              title: `${sub.merchant_name} Trial Ending Soon`,
+              message: `Your trial will renew at ${formatCurrencyAmount(sub.amount, user.preferred_currency || sub.currency || 'INR', sub.currency || 'INR')}. Cancel or revoke AutoPay if not needed.`,
+              type: 'warning',
+            });
+          } else if (sub.status === 'needs_review') {
+            alerts.push({
+              id: `review-${sub.id}`,
+              title: `${sub.merchant_name} Needs Date Review`,
+              message: `Unconfirmed renewal date for ${sub.merchant_name}. Please set date to enable automated reminders.`,
+              type: 'info',
+            });
+          }
+        });
+
+        setNotifications(alerts);
+      } catch (err) {
+        console.error('Error loading notifications:', err);
+      }
+    };
+
+    loadNotifications();
+  }, [user]);
 
   const handleCopyReferral = () => {
     navigator.clipboard.writeText(`${window.location.origin}/signup?ref=${user?.id || 'recusight50'}`);
@@ -334,18 +382,20 @@ export const AppShell: React.FC = () => {
               )}
             </div>
 
-            {/* Notification Bell with Red Badge '8' */}
+            {/* Notification Bell */}
             <div className="relative">
               <button
                 type="button"
                 onClick={() => setNotificationOpen(!notificationOpen)}
-                className="w-9 h-9 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-xs relative transition-colors"
+                className="w-9 h-9 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-xs relative transition-colors cursor-pointer"
                 title="Notifications"
               >
                 <Bell className="w-4 h-4" />
-                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center shadow-xs">
-                  8
-                </span>
+                {notifications.length > 0 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center shadow-xs">
+                    {notifications.length}
+                  </span>
+                )}
               </button>
 
               {/* Notification Dropdown */}
@@ -355,28 +405,59 @@ export const AppShell: React.FC = () => {
                     <span className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
                       Recent Alerts
                     </span>
-                    <span className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold cursor-pointer">
-                      Mark all read
-                    </span>
+                    {notifications.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setNotifications([])}
+                        className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold cursor-pointer hover:underline"
+                      >
+                        Mark all read
+                      </button>
+                    )}
                   </div>
-                  <div className="space-y-2 text-xs">
-                    <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-100 dark:border-amber-900/40">
-                      <p className="font-semibold text-amber-900 dark:text-amber-200">
-                        Figma trial ends in 3 days
-                      </p>
-                      <p className="text-amber-700 dark:text-amber-300 text-[11px] mt-0.5">
-                        Card ••4821 will be charged {formatCurrencyAmount(15.00, user?.preferred_currency || 'USD', 'USD')} on Oct 31 unless cancelled.
+
+                  {notifications.length === 0 ? (
+                    <div className="py-6 text-center text-slate-400 text-xs">
+                      <Bell className="w-6 h-6 mx-auto mb-2 opacity-30 text-slate-400" />
+                      <p className="font-semibold text-slate-700 dark:text-slate-200">No New Notifications</p>
+                      <p className="text-[11px] text-slate-400 mt-1 max-w-[220px] mx-auto">
+                        You have no active subscription alerts or upcoming renewal warnings right now.
                       </p>
                     </div>
-                    <div className="p-2.5 rounded-xl bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/40">
-                      <p className="font-semibold text-blue-900 dark:text-blue-200">
-                        Notion AI Plus Renewal
-                      </p>
-                      <p className="text-blue-700 dark:text-blue-300 text-[11px] mt-0.5">
-                        Upcoming renewal scheduled in 5 days ({formatCurrencyAmount(10.00, user?.preferred_currency || 'USD', 'USD')}).
-                      </p>
+                  ) : (
+                    <div className="space-y-2 text-xs">
+                      {notifications.map((n) => (
+                        <div
+                          key={n.id}
+                          className={`p-2.5 rounded-xl border ${
+                            n.type === 'warning'
+                              ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-100 dark:border-amber-900/40'
+                              : 'bg-blue-50 dark:bg-blue-950/30 border-blue-100 dark:border-blue-900/40'
+                          }`}
+                        >
+                          <p
+                            className={`font-semibold ${
+                              n.type === 'warning'
+                                ? 'text-amber-900 dark:text-amber-200'
+                                : 'text-blue-900 dark:text-blue-200'
+                            }`}
+                          >
+                            {n.title}
+                          </p>
+                          <p
+                            className={`text-[11px] mt-0.5 ${
+                              n.type === 'warning'
+                                ? 'text-amber-700 dark:text-amber-300'
+                                : 'text-blue-700 dark:text-blue-300'
+                            }`}
+                          >
+                            {n.message}
+                          </p>
+                        </div>
+                      ))}
                     </div>
-                  </div>
+                  )}
+
                   <NavLink
                     to="/reminders"
                     onClick={() => setNotificationOpen(false)}
