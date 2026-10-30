@@ -5,12 +5,13 @@ import { processInvoiceDocument, InvoiceExtractionResult, sanitizePdfExtractedTe
 export interface ParsedTransaction {
   merchantName: string;
   rawString: string;
-  amount: number;
+  amount: number | null;
+  amountStatus?: 'verified' | 'uncertain' | 'not_found' | 'edited';
   currency: Currency;
-  date: string;
-  renewalDate?: string;
-  paymentSource?: string;
-  cadence: 'monthly' | 'yearly';
+  date: string | null;
+  renewalDate?: string | null;
+  paymentSource?: string | null;
+  cadence: 'monthly' | 'yearly' | 'unknown';
   category: SubscriptionCategory;
   confidence: number;
   isDuplicate: boolean;
@@ -24,6 +25,8 @@ export interface ParsedTransaction {
   taxAmount?: number;
   paymentMethodConfidence?: number;
   extractionResult?: InvoiceExtractionResult;
+  amountEvidence?: string | null;
+  merchantEvidence?: string | null;
 }
 
 // Exchange rates for live currency switching
@@ -391,29 +394,45 @@ export async function parseDocument(
   const extraction = await processInvoiceDocument(file, onProgress, userPreferredCurrency);
 
   const merchant = extraction.merchantName.value || 'Subscription Service';
-  const amount = extraction.totalAmount.value || 0;
+  // NEVER replace unknown price with 0: preserve null when missing
+  const amount = extraction.totalAmount.value; 
   const currency = extraction.currency.value || userPreferredCurrency;
-  const renewalDate = extraction.renewalDate.value || extraction.invoiceDate.value || new Date().toISOString().split('T')[0];
-  const date = extraction.invoiceDate.value || new Date().toISOString().split('T')[0];
-  const paymentSource = extraction.paymentMethod.value || undefined;
-  const cadence = extraction.billingFrequency.value === 'yearly' ? 'yearly' : 'monthly';
+  // NEVER invent a renewal date: preserve null when not explicitly stated
+  const renewalDate = extraction.renewalDate.value;
+  const date = extraction.invoiceDate.value;
+  // Evidence-based payment source or null
+  const paymentSource = extraction.paymentMethod.value;
+  // NEVER assume missing cadence is monthly: mark as 'unknown' if not evidenced
+  const cadence: 'monthly' | 'yearly' | 'unknown' =
+    extraction.billingFrequency.value === 'yearly'
+      ? 'yearly'
+      : extraction.billingFrequency.value === 'monthly'
+      ? 'monthly'
+      : 'unknown';
+
   const confidence = Math.round(
     ((extraction.merchantName.confidence || 0) + (extraction.totalAmount.confidence || 0)) / 2
   );
+
+  const amountStatus: 'verified' | 'uncertain' | 'not_found' =
+    amount === null
+      ? 'not_found'
+      : (extraction.totalAmount.confidence >= 85 ? 'verified' : 'uncertain');
 
   const primaryTx: ParsedTransaction = {
     merchantName: merchant,
     rawString: `${merchant.toUpperCase().replace(/\s+/g, '_')}*INVOICE_${extraction.invoiceNumber.value || 'VERIFIED'}`,
     amount,
+    amountStatus,
     currency,
     date,
     renewalDate,
     paymentSource,
     cadence,
     category: extraction.serviceName.value ? detectCategoryFromText(extraction.serviceName.value + ' ' + merchant) : 'Software & Tools',
-    confidence: confidence > 0 ? confidence : 75,
-    isDuplicate: merchant.toLowerCase().includes('netflix'),
-    duplicateMerchant: merchant.toLowerCase().includes('netflix') ? 'Netflix 4K Tier' : undefined,
+    confidence: confidence > 0 ? confidence : 70,
+    isDuplicate: false,
+    duplicateMerchant: undefined,
     isRecurring: true,
     notes: extraction.warnings.length > 0 ? extraction.warnings.join('; ') : 'Document parsed via verified OCR/text extraction',
     detectedAmounts: extraction.detectedAmounts,
@@ -423,7 +442,11 @@ export async function parseDocument(
     taxAmount: extraction.taxAmount.value || undefined,
     paymentMethodConfidence: extraction.paymentMethod.confidence,
     extractionResult: extraction,
+    amountEvidence: extraction.totalAmount.evidenceText,
+    merchantEvidence: extraction.merchantName.evidenceText,
   };
+
+  return [primaryTx];
 
   return [primaryTx];
 }
@@ -579,24 +602,25 @@ async function parseCsvFile(file: File): Promise<ParsedTransaction[]> {
     if (row.length >= 2) {
       const desc = row[0] || row[1] || 'Transaction';
       const amtMatch = lines[i].match(/([0-9]+(?:\.[0-9]{2})?)/);
-      const amt = amtMatch ? parseFloat(amtMatch[1]) : 19.99;
+      const amt = amtMatch ? parseFloat(amtMatch[1]) : null;
 
       const found = KNOWN_MERCHANTS.find((m) => m.patterns.some((p) => p.test(desc)));
       candidates.push({
         merchantName: found ? found.name : desc.trim(),
         rawString: desc.trim(),
         amount: amt,
+        amountStatus: amt !== null ? 'verified' : 'not_found',
         currency: 'USD',
-        date: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
-        renewalDate: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
-        paymentSource: 'Primary Corporate Card •••• 4092',
-        cadence: found?.cadence || 'monthly',
+        date: null,
+        renewalDate: null,
+        paymentSource: null,
+        cadence: found?.cadence || 'unknown',
         category: found?.category || 'Software & Tools',
-        confidence: found ? 94 : 75,
-        isDuplicate: found?.name.includes('Netflix') || false,
-        duplicateMerchant: found?.name.includes('Netflix') ? 'Netflix 4K Tier' : undefined,
+        confidence: found ? 90 : 70,
+        isDuplicate: false,
+        duplicateMerchant: undefined,
         isRecurring: true,
-        detectedAmounts: [amt],
+        detectedAmounts: amt !== null ? [amt] : [],
       });
     }
   }

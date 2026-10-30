@@ -6,6 +6,7 @@ import { db } from '../../lib/supabase';
 import { parseDocument, ParsedTransaction, convertCurrency } from '../../lib/ocrParser';
 import { MerchantLogo } from '../../components/common/MerchantLogo';
 import {
+  Subscription,
   SubscriptionCategory,
   BillingIntervalUnit,
   PaymentSource,
@@ -136,13 +137,27 @@ export const AddSubscriptionPage: React.FC = () => {
   const userPreferredCurrency = user?.preferred_currency || 'USD';
   const [candidates, setCandidates] = useState<ParsedTransaction[]>([]);
   const [selectedCandidateIndex, setSelectedCandidateIndex] = useState<number>(0);
+  const [existingSubscriptions, setExistingSubscriptions] = useState<Subscription[]>([]);
+
+  // Load user's actual subscriptions for real deduplication (Never hardcoded)
+  useEffect(() => {
+    async function loadSubs() {
+      try {
+        const subs = await db.getSubscriptions(user?.id || 'default-user');
+        setExistingSubscriptions(subs);
+      } catch (err) {
+        console.warn('Error loading subscriptions for duplicate check:', err);
+      }
+    }
+    loadSubs();
+  }, [user?.id]);
 
   // Editable Form fields on Right Column (synced with selected candidate)
   const [formMerchantName, setFormMerchantName] = useState('');
   const [formCategory, setFormCategory] = useState<SubscriptionCategory>('Software & Tools');
   const [formAmount, setFormAmount] = useState('');
   const [formCurrency, setFormCurrency] = useState<Currency>(userPreferredCurrency);
-  const [formCadence, setFormCadence] = useState<'monthly' | 'yearly' | 'unknown'>('monthly');
+  const [formCadence, setFormCadence] = useState<'monthly' | 'yearly' | 'unknown'>('unknown');
   const [formCadencePrompt, setFormCadencePrompt] = useState(false);
   const [formRenewalDate, setFormRenewalDate] = useState('');
   const [formPaymentSourceId, setFormPaymentSourceId] = useState('');
@@ -229,15 +244,17 @@ export const AddSubscriptionPage: React.FC = () => {
     if (activeCandidate) {
       setFormMerchantName(activeCandidate.merchantName);
       setFormCategory(activeCandidate.category);
-      setFormAmount(activeCandidate.amount > 0 ? activeCandidate.amount.toFixed(2) : '');
+      setFormAmount(
+        activeCandidate.amount !== null && activeCandidate.amount !== undefined && activeCandidate.amount > 0
+          ? activeCandidate.amount.toFixed(2)
+          : ''
+      );
       const candCurrency = (activeCandidate.currency as Currency) || 'USD';
       setFormCurrency(candCurrency);
-      setFormCadence(activeCandidate.cadence === 'yearly' ? 'yearly' : 'monthly');
-      setFormRenewalDate(activeCandidate.renewalDate || activeCandidate.date);
-      setFormUnconfirmedEstimate(activeCandidate.confidence < 80);
-      if (activeCandidate.paymentSource) {
-        setFormPaymentSourceId(activeCandidate.paymentSource);
-      }
+      setFormCadence(activeCandidate.cadence || 'unknown');
+      setFormRenewalDate(activeCandidate.renewalDate || '');
+      setFormUnconfirmedEstimate(activeCandidate.confidence < 80 || activeCandidate.amount === null);
+      setFormPaymentSourceId(activeCandidate.paymentSource || '');
     }
   }, [selectedCandidateIndex, candidates]);
 
@@ -292,36 +309,55 @@ export const AddSubscriptionPage: React.FC = () => {
       const prefCur = user?.preferred_currency || 'USD';
       const extracted = await parseDocument(uploadedFile, (msg) => setStatusMessage(msg), prefCur);
       if (extracted.length > 0) {
-        setCandidates(extracted);
+        // Real duplicate detection against user's actual database subscriptions
+        const mapped = extracted.map((tx) => {
+          const clean = tx.merchantName.toLowerCase().trim();
+          const match = existingSubscriptions.find((s) => {
+            const sName = s.merchant_name.toLowerCase().trim();
+            return sName.includes(clean) || clean.includes(sName);
+          });
+          return {
+            ...tx,
+            isDuplicate: Boolean(match),
+            duplicateMerchant: match ? match.merchant_name : undefined,
+          };
+        });
+
+        setCandidates(mapped);
         setSelectedCandidateIndex(0);
         setExtractionDone(true);
 
-        const primaryCand = extracted[0];
+        const primaryCand = mapped[0];
         if (primaryCand) {
           setFormCurrency(primaryCand.currency);
-          setFormAmount(primaryCand.amount > 0 ? primaryCand.amount.toFixed(2) : '');
+          setFormAmount(
+            primaryCand.amount !== null && primaryCand.amount !== undefined && primaryCand.amount > 0
+              ? primaryCand.amount.toFixed(2)
+              : ''
+          );
           setFormMerchantName(primaryCand.merchantName);
           setFormCategory(primaryCand.category);
-          setFormCadence(primaryCand.cadence === 'yearly' ? 'yearly' : 'monthly');
-          setFormRenewalDate(primaryCand.renewalDate || primaryCand.date);
+          setFormCadence(primaryCand.cadence || 'unknown');
+          setFormRenewalDate(primaryCand.renewalDate || '');
           setFormPaymentSourceId(primaryCand.paymentSource || '');
-          setFormUnconfirmedEstimate(primaryCand.confidence < 80);
+          setFormUnconfirmedEstimate(primaryCand.confidence < 80 || primaryCand.amount === null);
         }
       } else {
         const cleanName = uploadedFile.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
         const customCand: ParsedTransaction = {
           merchantName: cleanName,
           rawString: uploadedFile.name,
-          amount: 0,
+          amount: null,
+          amountStatus: 'not_found',
           currency: prefCur,
-          date: new Date().toISOString().split('T')[0],
-          renewalDate: '',
-          cadence: 'monthly',
+          date: null,
+          renewalDate: null,
+          cadence: 'unknown',
           category: 'Software & Tools',
-          confidence: 60,
+          confidence: 45,
           isDuplicate: false,
           isRecurring: true,
-          notes: 'Uploaded document',
+          notes: 'No fields detected from document',
           detectedAmounts: [],
           ocrSnippet: `Uploaded file: ${uploadedFile.name}`,
         };
@@ -332,7 +368,7 @@ export const AddSubscriptionPage: React.FC = () => {
         setFormAmount('');
         setFormMerchantName(cleanName);
         setFormCategory('Software & Tools');
-        setFormCadence('monthly');
+        setFormCadence('unknown');
         setFormRenewalDate('');
         setFormPaymentSourceId('');
         setFormUnconfirmedEstimate(true);
@@ -343,20 +379,29 @@ export const AddSubscriptionPage: React.FC = () => {
       const fallbackCand: ParsedTransaction = {
         merchantName: cleanName,
         rawString: uploadedFile.name,
-        amount: 0,
+        amount: null,
+        amountStatus: 'not_found',
         currency: user?.preferred_currency || 'USD',
-        date: new Date().toISOString().split('T')[0],
-        renewalDate: '',
-        cadence: 'monthly',
+        date: null,
+        renewalDate: null,
+        cadence: 'unknown',
         category: 'Software & Tools',
-        confidence: 50,
+        confidence: 30,
         isDuplicate: false,
         isRecurring: true,
-        notes: 'File scan complete',
+        notes: 'File scan or OCR could not extract fields',
         detectedAmounts: [],
         ocrSnippet: uploadedFile.name,
       };
       setCandidates([fallbackCand]);
+      setSelectedCandidateIndex(0);
+      setExtractionDone(true);
+      setFormMerchantName(cleanName);
+      setFormAmount('');
+      setFormCadence('unknown');
+      setFormRenewalDate('');
+      setFormPaymentSourceId('');
+      setFormUnconfirmedEstimate(true);
       setSelectedCandidateIndex(0);
       setExtractionDone(true);
       setFormMerchantName(cleanName);
@@ -378,11 +423,11 @@ export const AddSubscriptionPage: React.FC = () => {
     setExtractionDone(true);
     if (defaultList[0]) {
       setFormCurrency(defaultList[0].currency);
-      setFormAmount(defaultList[0].amount.toFixed(2));
+      setFormAmount(defaultList[0].amount !== null && defaultList[0].amount !== undefined ? defaultList[0].amount.toFixed(2) : '');
       setFormMerchantName(defaultList[0].merchantName);
       setFormCategory(defaultList[0].category);
       setFormCadence(defaultList[0].cadence === 'yearly' ? 'yearly' : 'monthly');
-      setFormRenewalDate(defaultList[0].renewalDate || defaultList[0].date);
+      setFormRenewalDate(defaultList[0].renewalDate || defaultList[0].date || '');
       setFormPaymentSourceId(user?.preferred_currency === 'INR' ? 'HDFC Bank Salary A/c •••• 4092' : 'HDFC Visa Signature ending in •••• 4092');
       setFormUnconfirmedEstimate(defaultList[0].confidence < 80);
     }
@@ -811,19 +856,27 @@ export const AddSubscriptionPage: React.FC = () => {
                                 {cand.merchantName}
                               </h4>
                               <span className="text-[11px] text-slate-400 block mt-0.5">
-                                Post Date: {cand.date}
+                                Post Date: {cand.date || 'Not stated'}
                               </span>
                             </div>
                           </div>
 
                           <div className="flex items-center gap-3">
                             <div className="text-right">
-                              <span className="text-sm font-black text-slate-900 dark:text-white block">
-                                {CURRENCY_SYMBOLS[cand.currency || 'USD'] || '$'}{cand.amount.toFixed(2)}
-                              </span>
-                              <span className="text-[10px] text-slate-400 uppercase">
-                                {cand.currency}
-                              </span>
+                              {cand.amount !== null && cand.amount !== undefined ? (
+                                <>
+                                  <span className="text-sm font-black text-slate-900 dark:text-white block">
+                                    {CURRENCY_SYMBOLS[cand.currency || 'USD'] || '$'}{cand.amount.toFixed(2)}
+                                  </span>
+                                  <span className="text-[10px] text-slate-400 uppercase">
+                                    {cand.currency}
+                                  </span>
+                                </>
+                              ) : (
+                                <span className="text-xs font-bold text-amber-600 dark:text-amber-400 block">
+                                  Amount not detected
+                                </span>
+                              )}
                             </div>
 
                             <div
@@ -970,10 +1023,17 @@ export const AddSubscriptionPage: React.FC = () => {
                       Observed Charge *
                     </label>
                     {activeCandidate ? (
-                      <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
-                        <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-                        <span>Matched statement</span>
-                      </span>
+                      activeCandidate.amount !== null && activeCandidate.amount !== undefined ? (
+                        <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                          <span>Matched in document</span>
+                        </span>
+                      ) : (
+                        <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1">
+                          <AlertTriangle className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                          <span>Amount not detected</span>
+                        </span>
+                      )
                     ) : (
                       <span className="text-[11px] text-slate-400">
                         Recurring charge
@@ -988,7 +1048,7 @@ export const AddSubscriptionPage: React.FC = () => {
                       type="number"
                       step="0.01"
                       required
-                      placeholder="0.00"
+                      placeholder={activeCandidate && !formAmount ? 'Amount not detected — enter manually' : '0.00'}
                       value={formAmount}
                       onChange={(e) => setFormAmount(e.target.value)}
                       className="h-full flex-1 px-3 text-xs font-bold text-slate-900 dark:text-white bg-transparent focus:outline-none min-w-0"
@@ -1004,6 +1064,15 @@ export const AddSubscriptionPage: React.FC = () => {
                       <option value="GBP">GBP</option>
                     </select>
                   </div>
+                  {activeCandidate?.amountEvidence ? (
+                    <span className="text-[10px] text-slate-400 block mt-1 truncate">
+                      Evidence: {activeCandidate.amountEvidence}
+                    </span>
+                  ) : activeCandidate && !formAmount ? (
+                    <span className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold block mt-1">
+                      No monetary amount confirmed in document. Please enter before saving.
+                    </span>
+                  ) : null}
                 </div>
               </div>
 
@@ -1014,9 +1083,15 @@ export const AddSubscriptionPage: React.FC = () => {
                     Billing Cadence / Frequency
                   </label>
                   {activeCandidate ? (
-                    <span className="px-2 py-0.5 rounded-md bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 text-[10px] font-semibold border border-purple-200 dark:border-purple-800">
-                      Suggested
-                    </span>
+                    activeCandidate.cadence === 'yearly' || activeCandidate.cadence === 'monthly' ? (
+                      <span className="px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-[10px] font-semibold border border-emerald-200 dark:border-emerald-800">
+                        Detected in document
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 text-[10px] font-semibold border border-amber-200 dark:border-amber-800">
+                        Not specified in document
+                      </span>
+                    )
                   ) : null}
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">

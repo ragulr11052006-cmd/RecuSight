@@ -264,23 +264,127 @@ describe('Invoice Upload & Extraction Accuracy Test Suite', () => {
   });
 
   // =========================================================================
-  // 8. UNREADABLE / UNSUPPORTED DOCUMENT RESILIENCE
+  // 9. NO MONETARY AMOUNT, MISSING FREQUENCY & MISSING RENEWAL DATE
   // =========================================================================
-  describe('Unreadable or Corrupt Document Resilience', () => {
-    it('returns nulls and clean warnings for unreadable document without crashing', () => {
-      const corruptData = '~~~###@@@!!!???***%%%^^^&&&';
+  describe('Strict Missing Information & No Defaults', () => {
+    it('returns totalAmount as null and NEVER defaults to ₹0.00 or $0.00', () => {
+      const docWithNoAmount = `
+        AWS Welcome Letter
+        Amazon Web Services, Inc.
+        Thank you for subscribing to AWS Free Tier.
+        Account Number: 1234-5678-9012
+        No monetary payment was charged.
+      `;
 
-      const merchant = identifyMerchant(corruptData, 'scan_unknown.pdf');
-      expect(merchant.merchantName.value).toBeNull();
-      expect(merchant.merchantName.status).toBe('missing');
+      const result = extractTotalAmountAndCurrency(docWithNoAmount, 'aws_welcome.pdf', 'INR');
+      expect(result.totalAmount.value).toBeNull();
+      expect(result.totalAmount.status).toBe('missing');
+      expect(result.totalAmount.confidence).toBe(0);
+      expect(result.totalAmount.value).not.toBe(0); // MUST NEVER BE 0.00
+    });
 
-      const amount = extractTotalAmountAndCurrency(corruptData, 'scan_unknown.pdf', 'USD');
-      expect(amount.totalAmount.value).toBeNull();
-      expect(amount.totalAmount.status).toBe('missing');
+    it('returns billingFrequency as null when not specified and NEVER defaults to monthly', () => {
+      const oneOffReceipt = `
+        Apple Store Receipt
+        Receipt #APL-99128
+        Date: 2026-10-15
+        Hardware Accessory Purchase
+        Total Amount: $49.00
+      `;
 
-      const payment = extractPaymentMethod(corruptData);
-      expect(payment.value).toBeNull();
-      expect(payment.status).toBe('missing');
+      const dates = extractDatesAndPeriod(oneOffReceipt, null);
+      expect(dates.billingFrequency.value).toBeNull();
+      expect(dates.billingFrequency.status).toBe('missing');
+      expect(dates.billingFrequency.value).not.toBe('monthly'); // MUST NEVER DEFAULT TO MONTHLY
+    });
+
+    it('returns renewalDate as null when not stated and NEVER invents a date', () => {
+      const receiptNoRenewal = `
+        GitHub Inc.
+        Invoice Date: October 10, 2026
+        GitHub Copilot Organization Seat
+        Total Charged: $19.00
+      `;
+
+      const dates = extractDatesAndPeriod(receiptNoRenewal, null);
+      expect(dates.renewalDate.value).toBeNull();
+      expect(dates.renewalDate.status).toBe('missing');
+    });
+  });
+
+  // =========================================================================
+  // 10. MULTI-LINE TOTAL & TOTAL WITH TAX LINE-ITEM PATTERNS
+  // =========================================================================
+  describe('Complex Total Amount Document Patterns', () => {
+    it('extracts Grand Total when line contains "incl. GST" without being skipped as a tax line', () => {
+      const inclGstInvoice = `
+        Atlassian Pty Ltd
+        Invoice #ATL-10924
+        Subtotal: ₹1,000.00
+        IGST (18%): ₹180.00
+        Total (incl. GST): ₹1,180.00
+        Amount Paid: ₹1,180.00
+      `;
+
+      const res = extractTotalAmountAndCurrency(inclGstInvoice, 'atlassian.pdf', 'INR');
+      expect(res.totalAmount.value).toBe(1180);
+      expect(res.subtotal.value).toBe(1000);
+      expect(res.taxAmount.value).toBe(180);
+      expect(res.currency.value).toBe('INR');
+      expect(res.totalAmount.value).not.toBe(1000);
+      expect(res.totalAmount.value).not.toBe(180);
+    });
+
+    it('extracts Total when header and amount are on consecutive lines in table format', () => {
+      const tableInvoice = `
+        Spotify India
+        Invoice Date: 2026-10-25
+        Subtotal
+        ₹119.00
+        Total Amount Due:
+        ₹119.00
+      `;
+
+      const res = extractTotalAmountAndCurrency(tableInvoice, 'spotify_table.pdf', 'INR');
+      expect(res.totalAmount.value).toBe(119);
+      expect(res.currency.value).toBe('INR');
+    });
+
+    it('extracts consecutive documents independently without data contamination', () => {
+      const doc1 = `
+        Netflix International B.V.
+        Invoice #NF-101
+        Total Amount: ₹649.00
+        Payment Method: UPI AutoPay (user@okhdfcbank)
+      `;
+
+      const doc2 = `
+        LinkedIn Ireland Unlimited Company
+        Invoice #LI-202
+        Total Amount Paid: ₹1,499.00
+        Paid via Visa ending in 4092
+      `;
+
+      const res1 = extractTotalAmountAndCurrency(doc1, 'netflix.pdf', 'INR');
+      const merchant1 = identifyMerchant(doc1, 'netflix.pdf');
+      const pay1 = extractPaymentMethod(doc1);
+
+      const res2 = extractTotalAmountAndCurrency(doc2, 'linkedin.pdf', 'INR');
+      const merchant2 = identifyMerchant(doc2, 'linkedin.pdf');
+      const pay2 = extractPaymentMethod(doc2);
+
+      expect(merchant1.merchantName.value).toBe('Netflix');
+      expect(res1.totalAmount.value).toBe(649);
+      expect(pay1.value).toBe('UPI AutoPay (user@okhdfcbank)');
+
+      expect(merchant2.merchantName.value).toBe('LinkedIn');
+      expect(res2.totalAmount.value).toBe(1499);
+      expect(pay2.value).toBe('Visa •••• 4092');
+
+      // Zero cross-contamination
+      expect(merchant1.merchantName.value).not.toBe(merchant2.merchantName.value);
+      expect(res1.totalAmount.value).not.toBe(res2.totalAmount.value);
+      expect(pay1.value).not.toBe(pay2.value);
     });
   });
 });

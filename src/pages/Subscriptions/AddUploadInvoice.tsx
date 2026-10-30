@@ -32,10 +32,10 @@ interface ExtractedCandidate {
   id: string;
   merchantName: string;
   rawString: string;
-  amount: number;
+  amount: number | null;
   currency: string;
-  date: string;
-  cadence: 'monthly' | 'yearly';
+  date: string | null;
+  cadence: 'monthly' | 'yearly' | 'unknown';
   category: SubscriptionCategory;
   confidence: number;
   isDuplicate: boolean;
@@ -43,6 +43,7 @@ interface ExtractedCandidate {
   isRecurring: boolean;
   selected: boolean;
   paymentSource?: string;
+  amountEvidence?: string | null;
 }
 
 export const AddUploadInvoice: React.FC = () => {
@@ -125,15 +126,16 @@ export const AddUploadInvoice: React.FC = () => {
           rawString: item.rawString,
           amount: item.amount,
           currency: item.currency,
-          date: item.renewalDate || item.date,
-          cadence: item.cadence,
+          date: item.renewalDate || item.date || null,
+          cadence: item.cadence || 'unknown',
           category: item.category,
           confidence: item.confidence,
           isDuplicate: item.isDuplicate,
           duplicateMerchant: item.duplicateMerchant,
           isRecurring: item.isRecurring,
           selected: idx === 0,
-          paymentSource: item.paymentSource,
+          paymentSource: item.paymentSource || undefined,
+          amountEvidence: item.amountEvidence,
         }));
         setCandidates(mapped);
         setSelectedCandidate(mapped[0]);
@@ -143,12 +145,12 @@ export const AddUploadInvoice: React.FC = () => {
           id: 'ext-fallback',
           merchantName: cleanName,
           rawString: selectedFile.name,
-          amount: 0,
+          amount: null,
           currency: prefCur,
-          date: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
-          cadence: 'monthly',
+          date: null,
+          cadence: 'unknown',
           category: 'Software & Tools',
-          confidence: 65,
+          confidence: 40,
           isDuplicate: false,
           isRecurring: true,
           selected: true,
@@ -166,12 +168,12 @@ export const AddUploadInvoice: React.FC = () => {
         id: 'ext-error',
         merchantName: cleanName,
         rawString: selectedFile.name,
-        amount: 0,
+        amount: null,
         currency: (user?.preferred_currency as any) || 'USD',
-        date: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
-        cadence: 'monthly',
+        date: null,
+        cadence: 'unknown',
         category: 'Software & Tools',
-        confidence: 50,
+        confidence: 30,
         isDuplicate: false,
         isRecurring: true,
         selected: true,
@@ -216,20 +218,23 @@ export const AddUploadInvoice: React.FC = () => {
     const modeBadge = selectedCandidate.paymentSource?.trim() ? 'AutoPay: Active' : 'Not available in invoice';
 
     // 2. Create verified subscription record
+    const numAmount = selectedCandidate.amount || 0;
+    const intervalUnit: BillingIntervalUnit = selectedCandidate.cadence === 'yearly' ? 'years' : 'months';
+
     const created = await db.createSubscription({
       user_id: userId,
       merchant_name: selectedCandidate.merchantName,
       category: selectedCandidate.category,
-      amount: selectedCandidate.amount,
+      amount: numAmount,
       currency: selectedCandidate.currency as any,
       billing_interval: 1,
-      billing_interval_unit: selectedCandidate.cadence === 'yearly' ? 'years' : 'months',
-      next_billing_date: selectedCandidate.date,
+      billing_interval_unit: intervalUnit,
+      next_billing_date: selectedCandidate.date || undefined,
       payment_mode_label: modeLabel,
       payment_mode_badge: modeBadge,
       status: unconfirmedEstimate ? 'needs_review' : 'active',
       confidence_status: unconfirmedEstimate ? 'unconfirmed_estimate' : 'verified',
-      notes: `Extracted from statement: ${selectedCandidate.rawString}`,
+      notes: `Extracted from document: ${selectedCandidate.rawString}`,
     });
 
     // 3. Create extracted transaction record
@@ -239,9 +244,9 @@ export const AddUploadInvoice: React.FC = () => {
         document_id: documentId,
         merchant_name: selectedCandidate.merchantName,
         transaction_description: selectedCandidate.rawString,
-        amount: selectedCandidate.amount,
+        amount: numAmount,
         currency: selectedCandidate.currency as any,
-        transaction_date: selectedCandidate.date,
+        transaction_date: selectedCandidate.date || new Date().toISOString().split('T')[0],
         suggested_cadence: selectedCandidate.cadence,
         suggested_category: selectedCandidate.category,
         confidence_score: selectedCandidate.confidence / 100,
@@ -391,7 +396,7 @@ export const AddUploadInvoice: React.FC = () => {
                   {file?.name || 'Bank_Statement_October_2026.pdf'}
                 </span>
                 <span className="text-[11px] text-slate-400">
-                  {((file?.size || 245000) / 1024).toFixed(1)} KB • 3 Recurring Candidates Detected
+                  {((file?.size || 245000) / 1024).toFixed(1)} KB • {candidates.length} Candidate(s) Detected
                 </span>
               </div>
             </div>
@@ -443,12 +448,20 @@ export const AddUploadInvoice: React.FC = () => {
                       </div>
 
                       <div className="text-right">
-                        <span className="text-sm font-black text-slate-900 dark:text-white">
-                          ${cand.amount}
-                        </span>
-                        <span className="text-[10px] text-slate-400 block capitalize">
-                          /{cand.cadence}
-                        </span>
+                        {cand.amount !== null && cand.amount !== undefined ? (
+                          <>
+                            <span className="text-sm font-black text-slate-900 dark:text-white block">
+                              {cand.currency} {cand.amount.toFixed(2)}
+                            </span>
+                            <span className="text-[10px] text-slate-400 block capitalize">
+                              {cand.cadence !== 'unknown' ? `/${cand.cadence}` : 'Cadence unknown'}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-xs font-bold text-amber-600 dark:text-amber-400 block">
+                            Amount not detected
+                          </span>
+                        )}
                       </div>
                     </div>
 
@@ -513,19 +526,32 @@ export const AddUploadInvoice: React.FC = () => {
 
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-slate-400 font-semibold mb-1">Observed Charge</label>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-slate-400 font-semibold">Observed Charge</label>
+                          {selectedCandidate.amount !== null && selectedCandidate.amount !== undefined ? (
+                            <span className="text-[10px] text-emerald-600 font-bold">Matched in Document</span>
+                          ) : (
+                            <span className="text-[10px] text-amber-600 font-bold">Amount not detected</span>
+                          )}
+                        </div>
                         <input
                           type="number"
                           step="0.01"
-                          value={selectedCandidate.amount}
+                          placeholder={selectedCandidate.amount === null ? 'Amount not detected — enter value' : '0.00'}
+                          value={selectedCandidate.amount !== null && selectedCandidate.amount !== undefined ? selectedCandidate.amount : ''}
                           onChange={(e) =>
                             setSelectedCandidate({
                               ...selectedCandidate,
-                              amount: parseFloat(e.target.value) || 0,
+                              amount: e.target.value ? parseFloat(e.target.value) : null,
                             })
                           }
                           className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-bold text-slate-900 dark:text-white"
                         />
+                        {selectedCandidate.amountEvidence ? (
+                          <span className="text-[10px] text-slate-400 mt-1 block truncate">
+                            Evidence: {selectedCandidate.amountEvidence}
+                          </span>
+                        ) : null}
                       </div>
 
                       <div>
@@ -550,7 +576,7 @@ export const AddUploadInvoice: React.FC = () => {
                       <label className="block text-slate-400 font-semibold mb-1">Projected Next Renewal</label>
                       <input
                         type="date"
-                        value={selectedCandidate.date}
+                        value={selectedCandidate.date || ''}
                         onChange={(e) =>
                           setSelectedCandidate({
                             ...selectedCandidate,

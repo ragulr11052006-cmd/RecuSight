@@ -763,6 +763,16 @@ export function parseMonetaryValue(str: string): number | null {
   return isNaN(val) ? null : val;
 }
 
+export function isLikelyYearOrId(val: number, contextText: string): boolean {
+  if (val >= 2020 && val <= 2030 && Number.isInteger(val)) {
+    // If the text surrounding it mentions date/year/month or has date punctuation, it's a year
+    if (/(?:date|year|202[0-9]|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i.test(contextText)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function extractTotalAmountAndCurrency(
   text: string,
   filename: string,
@@ -794,13 +804,13 @@ export function extractTotalAmountAndCurrency(
   let currencyEvidence: string | null = null;
 
   // Regex specifically targeting final totals
-  const finalTotalRegex = /(?:grand\s*total|final\s*amount\s*(?:due|paid|charged|payable)?|total\s*amount\s*(?:due|paid|charged|payable)?|total\s*payable|net\s*payable|final\s*total|amount\s*paid|amount\s*due|total\s*charged|total\s*billed|invoice\s*total|total\s*pay[eé]|total\s*[:=]|total\s+amt|total|paid|amount)[:\s]*([₹$€£]|inr|usd|eur|gbp|rs\.?)?\s*([0-9]{1,3}(?:[.,][0-9]{2,3})*(?:[.,][0-9]{1,2})?|[0-9]{1,6})\s*([₹$€£]|inr|usd|eur|gbp)?/i;
-  const subtotalRegex = /(?:subtotal|sub-total|sub\s+total|net\s*subtotal|net\s*amount|taxable\s*value)[:\s]*([₹$€£]|inr|usd|eur|gbp|rs\.?)?\s*([0-9]{1,3}(?:[.,][0-9]{2,3})*(?:[.,][0-9]{1,2})?|[0-9]{1,6})\s*([₹$€£]|inr|usd|eur|gbp)?/i;
-  const taxRegex = /(?:(?:total\s*)?tax|gst|igst|cgst\s*\+\s*sgst|cgst|sgst|vat|tva)(?:\s*(?:@|at)?\s*[0-9]+%?)?[:\s]*([₹$€£]|inr|usd|eur|gbp|rs\.?)?\s*([0-9]{1,3}(?:[.,][0-9]{2,3})*(?:[.,][0-9]{1,2})?|[0-9]{1,6})\s*([₹$€£]|inr|usd|eur|gbp)?/i;
+  const finalTotalRegex = /(?:grand\s*total|final\s*amount\s*(?:due|paid|charged|payable)?|total\s*amount\s*(?:due|paid|charged|payable)?|total\s*payable|net\s*payable|final\s*total|amount\s*paid|amount\s*due|total\s*charged|total\s*billed|invoice\s*total|total\s*pay[eé]|total\s*[:=]|total\s+amt|total|paid|amount)(?:\s*\([^)]*\))?[:\s]*([₹$€£]|inr|usd|eur|gbp|rs\.?)?\s*([0-9]{1,3}(?:[.,][0-9]{2,3})*(?:[.,][0-9]{1,2})?|[0-9]{1,6})\s*([₹$€£]|inr|usd|eur|gbp|\/-)?/i;
+  const subtotalRegex = /(?:subtotal|sub-total|sub\s+total|net\s*subtotal|net\s*amount|taxable\s*value)[:\s]*([₹$€£]|inr|usd|eur|gbp|rs\.?)?\s*([0-9]{1,3}(?:[.,][0-9]{2,3})*(?:[.,][0-9]{1,2})?|[0-9]{1,6})\s*([₹$€£]|inr|usd|eur|gbp|\/-)?/i;
+  const taxRegex = /(?:(?:total\s*)?tax|gst|igst|cgst\s*\+\s*sgst|cgst|sgst|vat|tva)(?:\s*(?:@|at)?\s*\(?[0-9]+%?\)?|\s*\([^)]*\))?[:\s]*([₹$€£]|inr|usd|eur|gbp|rs\.?)?\s*([0-9]{1,3}(?:[.,][0-9]{2,3})*(?:[.,][0-9]{1,2})?|[0-9]{1,6})\s*([₹$€£]|inr|usd|eur|gbp|\/-)?/i;
 
   // Pass 1: Line-by-line inspection
-  for (const line of lines) {
-    const trimmed = line.trim();
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i].trim();
     if (!trimmed) continue;
 
     // Subtotal
@@ -808,7 +818,7 @@ export function extractTotalAmountAndCurrency(
       const sm = trimmed.match(subtotalRegex);
       if (sm && sm[2]) {
         const val = parseMonetaryValue(sm[2]);
-        if (val && val > 0) {
+        if (val && val > 0 && !isLikelyYearOrId(val, trimmed)) {
           extractedSubtotal = val;
           subtotalEvidence = trimmed;
         }
@@ -820,25 +830,29 @@ export function extractTotalAmountAndCurrency(
       const tm = trimmed.match(taxRegex);
       if (tm && tm[2]) {
         const val = parseMonetaryValue(tm[2]);
-        if (val && val > 0) {
+        if (val && val > 0 && !isLikelyYearOrId(val, trimmed)) {
           extractedTax = val;
           taxEvidence = trimmed;
         }
       }
     }
 
-    // Skip intermediate lines when checking for final total
-    if (/subtotal|sub-total|sub\s+total|net\s*subtotal|discount|tax\b|gst\b|vat\b|cgst|sgst|fee\b|convenience|balance\s*due/i.test(trimmed)) {
+    // Determine if this line is purely an intermediate line (e.g. Subtotal, Discount, standalone Tax)
+    // CRITICAL: A line like "Total (incl. GST): ₹1,180.00" has "gst" but IS a Grand Total line!
+    // So only skip if it is NOT a Grand Total line.
+    const isTotalCandidate = /(?:grand\s*total|final\s*amount|total\s*amount|amount\s*paid|total\s*charged|total\s*paid|net\s*payable|total\s*payable|invoice\s*total|total\s*billed|amount\s*due|total\s*due|\btotal\b|\bpaid\b)/i.test(trimmed);
+    const isPureIntermediate = !isTotalCandidate && /^(?:subtotal|sub-total|sub\s+total|net\s*subtotal|discount|promo|coupon|convenience|balance\s*due|fee)\b/i.test(trimmed);
+
+    if (isPureIntermediate) {
       continue;
     }
 
-    // Final Total
+    // Final Total check on current line
     if (!extractedTotal) {
       const tm = trimmed.match(finalTotalRegex);
       if (tm && tm[2]) {
         const val = parseMonetaryValue(tm[2]);
-        // Disqualify calendar years e.g. 2026, 2025
-        if (val && val > 0 && !(val >= 2020 && val <= 2030 && Number.isInteger(val))) {
+        if (val && val > 0 && !isLikelyYearOrId(val, trimmed)) {
           extractedTotal = val;
           totalEvidence = trimmed;
           totalConfidence = 95;
@@ -860,6 +874,25 @@ export function extractTotalAmountAndCurrency(
             currencyEvidence = tm[1] || tm[3] || '₹';
           }
         }
+      } else if (isTotalCandidate && i + 1 < lines.length) {
+        // Multi-line table support: Header on line i ("Total Amount Due:"), amount on line i + 1 ("₹1,499.00")
+        const nextLine = lines[i + 1].trim();
+        const nextMatch = nextLine.match(/^([₹$€£]|inr|usd|eur|gbp|rs\.?)?\s*([0-9]{1,3}(?:[.,][0-9]{2,3})*(?:[.,][0-9]{1,2})?|[0-9]{1,6})\s*([₹$€£]|inr|usd|eur|gbp|\/-)?$/i);
+        if (nextMatch && nextMatch[2]) {
+          const val = parseMonetaryValue(nextMatch[2]);
+          if (val && val > 0 && !isLikelyYearOrId(val, nextLine)) {
+            extractedTotal = val;
+            totalEvidence = `${trimmed} -> ${nextLine}`;
+            totalConfidence = 92;
+            detectedAmounts.push(val);
+
+            const sym = ((nextMatch[1] || nextMatch[3] || '') + '').toLowerCase();
+            if (sym === '$' || sym === 'usd' || nextLine.includes('$')) explicitCurrency = 'USD';
+            else if (sym === '€' || sym === 'eur' || nextLine.includes('€')) explicitCurrency = 'EUR';
+            else if (sym === '£' || sym === 'gbp' || nextLine.includes('£')) explicitCurrency = 'GBP';
+            else if (sym === '₹' || sym.includes('rs') || sym === 'inr' || nextLine.includes('₹')) explicitCurrency = 'INR';
+          }
+        }
       }
     }
   }
@@ -879,13 +912,31 @@ export function extractTotalAmountAndCurrency(
     }
   }
 
-  // Pass 3: Fallback search if no explicit final total line matched
+  // Pass 3: Fallback calculation & symbol pattern search if no explicit final total line matched
+  if (!extractedTotal && extractedSubtotal && extractedTax) {
+    extractedTotal = Math.round((extractedSubtotal + extractedTax) * 100) / 100;
+    totalEvidence = `Calculated Total (Subtotal ${extractedSubtotal} + Tax ${extractedTax})`;
+    totalConfidence = 90;
+    detectedAmounts.push(extractedTotal);
+    warnings.push('Final total calculated from extracted subtotal and tax amounts.');
+  }
+
   if (!extractedTotal) {
-    const symbolMatches = text.matchAll(/(?:₹|rs\.?|inr|usd|eur|gbp|\$|€|£)\s*([0-9]{1,3}(?:[.,][0-9]{2,3})*(?:[.,][0-9]{1,2})?)/gi);
+    // Search for numbers preceded OR followed by currency symbols
+    const prefixMatches = text.matchAll(/(?:₹|rs\.?|inr|usd|eur|gbp|\$|€|£)\s*([0-9]{1,3}(?:[.,][0-9]{2,3})*(?:[.,][0-9]{1,2})?)/gi);
+    const suffixMatches = text.matchAll(/([0-9]{1,3}(?:[.,][0-9]{2,3})*(?:[.,][0-9]{1,2})?)\s*(?:₹|rs\.?|inr|usd|eur|gbp|\$|€|£|\/-)/gi);
+    
     const candidateAmounts: number[] = [];
-    for (const sm of symbolMatches) {
+    for (const sm of prefixMatches) {
       const val = parseMonetaryValue(sm[1]);
-      if (val && val > 0 && !(val >= 2020 && val <= 2030 && Number.isInteger(val))) {
+      if (val && val > 0 && !isLikelyYearOrId(val, text)) {
+        candidateAmounts.push(val);
+        detectedAmounts.push(val);
+      }
+    }
+    for (const sm of suffixMatches) {
+      const val = parseMonetaryValue(sm[1]);
+      if (val && val > 0 && !isLikelyYearOrId(val, text)) {
         candidateAmounts.push(val);
         detectedAmounts.push(val);
       }
@@ -896,7 +947,9 @@ export function extractTotalAmountAndCurrency(
       extractedTotal = Math.max(...candidateAmounts);
       totalEvidence = `Extracted from document values: ${extractedTotal}`;
       totalConfidence = 75;
-      warnings.push('Final total line was ambiguous; verified highest monetary charge.');
+      warnings.push('Final total line was ambiguous; selected highest verified monetary amount.');
+    } else {
+      warnings.push('Amount not detected in invoice.');
     }
   }
 
@@ -1150,7 +1203,7 @@ export function extractInvoiceNumber(text: string): ExtractedField<string> {
 
 export function extractDatesAndPeriod(
   text: string,
-  cadence: 'monthly' | 'yearly' = 'monthly'
+  cadence?: 'monthly' | 'yearly' | null
 ): {
   invoiceDate: ExtractedField<string>;
   billingPeriod: ExtractedField<string>;
@@ -1224,11 +1277,11 @@ export function extractDatesAndPeriod(
     renewalVal = derivedRenewalFromPeriod;
     renewalEvidence = `Derived from billing period: ${periodVal}`;
     renewalConfidence = 88;
-  } else if (invDateVal) {
-    // Forward project from invoice date
-    renewalVal = advanceIsoDate(invDateVal, freq || cadence);
-    renewalEvidence = `Projected from invoice date (${invDateVal}) + 1 billing interval`;
-    renewalConfidence = 70;
+  } else {
+    // NEVER invent a renewal date when document does not state one!
+    renewalVal = null;
+    renewalEvidence = null;
+    renewalConfidence = 0;
   }
 
   return {
@@ -1430,8 +1483,8 @@ export async function processInvoiceDocument(
   // 4. Identify Invoice Number
   const invoiceNumberInfo = extractInvoiceNumber(docCombinedText);
 
-  // 5. Identify Dates and Cadence
-  const datesInfo = extractDatesAndPeriod(docCombinedText, 'monthly');
+  // 5. Identify Dates and Cadence (Never assume monthly!)
+  const datesInfo = extractDatesAndPeriod(docCombinedText, null);
 
   const warnings = [...amountInfo.warnings];
   if (paymentMethodInfo.status === 'missing') {
@@ -1439,6 +1492,12 @@ export async function processInvoiceDocument(
   }
   if (!merchantInfo.merchantName.value) {
     warnings.push('Invoice issuer could not be determined with high confidence.');
+  }
+  if (datesInfo.billingFrequency.status === 'missing') {
+    warnings.push('Billing frequency is not explicitly specified in this invoice.');
+  }
+  if (datesInfo.renewalDate.status === 'missing') {
+    warnings.push('Next renewal date is not stated in this invoice.');
   }
 
   return {
