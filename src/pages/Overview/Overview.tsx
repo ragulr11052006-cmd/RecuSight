@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../lib/supabase';
 import { Subscription } from '../../types';
 import { MerchantLogo } from '../../components/common/MerchantLogo';
-import { formatCurrencyAmount, convertCurrency } from '../../lib/currency';
+import { formatCurrencyAmount, convertCurrency, calculateNormalizedMonthly } from '../../lib/currency';
 import {
   CreditCard,
   AlertTriangle,
@@ -54,20 +54,21 @@ export const Overview: React.FC = () => {
   };
 
   // Dynamic Calculations (no hardcoding)
+  const allActiveCommitments = subscriptions.filter(s => s.status !== 'cancelled' && s.status !== 'paused');
   const activeSubs = subscriptions.filter(s => s.status === 'active');
   const trialSubs = subscriptions.filter(s => s.status === 'trial');
   const attentionSubs = subscriptions.filter(s => s.status === 'needs_review' || s.confidence_status === 'unconfirmed_estimate');
 
-  // Expenditure calculation tracking subscription transaction amounts directly in user preferred currency
-  const calculateSubscriptionAmount = (sub: Subscription): number => {
+  // Expenditure calculation with accurate cycle normalization (yearly plans / 12, weekly plans * 52 / 12)
+  const calculateSubscriptionMonthlyAmount = (sub: Subscription): number => {
     const rawAmt = Number(sub.amount) || 0;
     const prefCur = user?.preferred_currency || 'USD';
     const subCur = (sub.currency as any) || prefCur;
-    return convertCurrency(rawAmt, subCur, prefCur);
+    const inUserCur = convertCurrency(rawAmt, subCur, prefCur);
+    return calculateNormalizedMonthly(inUserCur, sub.billing_interval_unit, sub.billing_interval);
   };
 
-  const calculatedRunRate = activeSubs.reduce((acc, curr) => acc + calculateSubscriptionAmount(curr), 0);
-  const monthlyRunRate = calculatedRunRate;
+  const monthlyRunRate = allActiveCommitments.reduce((acc, curr) => acc + calculateSubscriptionMonthlyAmount(curr), 0);
   const totalSpend = spendInterval === 'yearly' ? monthlyRunRate * 12 : monthlyRunRate;
 
   // Category Spend Distribution (strictly derived from database subscriptions)
@@ -90,9 +91,10 @@ export const Overview: React.FC = () => {
     'Other': '#64748B',
   };
 
-  activeSubs.forEach((sub) => {
+  allActiveCommitments.forEach((sub) => {
     const cat = sub.category || 'Other';
-    const subAmt = calculateSubscriptionAmount(sub);
+    const subMonthly = calculateSubscriptionMonthlyAmount(sub);
+    const subAmt = spendInterval === 'yearly' ? subMonthly * 12 : subMonthly;
     if (!categoryMap[cat]) {
       categoryMap[cat] = {
         apps: 0,
@@ -109,7 +111,7 @@ export const Overview: React.FC = () => {
       name,
       apps: data.apps,
       amount: data.amount,
-      pct: monthlyRunRate > 0 ? Math.round((data.amount / monthlyRunRate) * 100) : 0,
+      pct: totalSpend > 0 ? Math.round((data.amount / totalSpend) * 100) : 0,
       color: data.color,
     }))
     .sort((a, b) => b.amount - a.amount);
@@ -153,7 +155,7 @@ export const Overview: React.FC = () => {
     return new Date(s.created_at) < startOfCurrentMonth;
   });
   const priorPeriodMonthlySpend = priorPeriodActiveSubs.reduce(
-    (acc, curr) => acc + calculateSubscriptionAmount(curr),
+    (acc, curr) => acc + calculateSubscriptionMonthlyAmount(curr),
     0
   );
 
@@ -213,6 +215,11 @@ export const Overview: React.FC = () => {
     allUpcoming;
 
   const prefCur = user?.preferred_currency || 'USD';
+
+  const allUpcomingTotal = allUpcoming.reduce(
+    (sum, s) => sum + convertCurrency(Number(s.amount) || 0, (s.currency as any) || prefCur, prefCur),
+    0
+  );
 
   const upcomingTotal = filteredUpcoming.reduce(
     (sum, s) => sum + convertCurrency(Number(s.amount) || 0, (s.currency as any) || prefCur, prefCur),
@@ -280,7 +287,7 @@ export const Overview: React.FC = () => {
             <div className="flex items-center justify-between mt-3">
               <div className="flex items-baseline gap-1.5">
                 <span className="text-3xl font-black text-[#151B2D] dark:text-white">
-                  {activeSubs.length}
+                  {allActiveCommitments.length}
                 </span>
                 <span className="text-xs text-slate-400">Apps</span>
               </div>
@@ -313,7 +320,7 @@ export const Overview: React.FC = () => {
               newSubsBadgeCount > 0 ? 'bg-[#E8F7EE] dark:bg-emerald-950/60 text-[#126639] dark:text-emerald-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
             }`}>
               <TrendingUp className="w-3 h-3" />
-              {newSubsBadgeCount > 0 ? `+${newSubsBadgeCount} new this month` : '0 new this month'}
+              {trialSubs.length > 0 ? `${activeSubs.length} paid • ${trialSubs.length} trials` : `${activeSubs.length} active`}
             </span>
           </div>
         </div>
@@ -457,11 +464,11 @@ export const Overview: React.FC = () => {
             <div className="flex items-center justify-between mt-3">
               <div className="flex items-baseline gap-1.5">
                 <span className="text-3xl font-black text-[#151B2D] dark:text-white">
-                  {weeklyUpcoming.length}
+                  {allUpcoming.length}
                 </span>
                 <span className="text-xs text-slate-400">Bills</span>
                 <span className="text-xs text-slate-400 font-normal">
-                  ({formatCurrency(weeklyUpcomingTotal)})
+                  ({formatCurrency(allUpcomingTotal)})
                 </span>
               </div>
 
@@ -492,7 +499,7 @@ export const Overview: React.FC = () => {
             <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
               weeklyUpcoming.length > 0 ? 'bg-[#E0F2FE] dark:bg-sky-950/60 text-[#0369A1] dark:text-sky-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
             }`}>
-              Due in 7 days ({weeklyUpcoming.length})
+              {weeklyUpcoming.length} Due in 7 days ({formatCurrency(weeklyUpcomingTotal)})
             </span>
           </div>
         </div>
@@ -693,9 +700,9 @@ export const Overview: React.FC = () => {
               </span>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-4 max-h-[360px] overflow-y-auto pr-1">
               {trialSubs.length > 0 ? (
-                trialSubs.slice(0, 2).map((trial) => {
+                trialSubs.map((trial) => {
                   const endsInDays = trial.next_billing_date
                     ? Math.max(0, Math.ceil((new Date(trial.next_billing_date).getTime() - now.getTime()) / (1000 * 3600 * 24)))
                     : 3;
