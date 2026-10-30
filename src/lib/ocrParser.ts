@@ -378,6 +378,19 @@ export const KNOWN_MERCHANTS: {
 // MAIN ENTRY POINT: parseDocument
 // =========================================================================
 
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      const base64 = result.includes(',') ? result.split(',')[1] : result;
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 export async function parseDocument(
   file: File,
   onProgress?: (msg: string) => void,
@@ -390,7 +403,62 @@ export async function parseDocument(
     return parseCsvFile(file);
   }
 
-  // Use the advanced, production-grade document extraction engine
+  // 1. Try Google Cloud Document AI via Supabase Edge Function if configured
+  try {
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    if (supabaseUrl && supabaseAnonKey && typeof window !== 'undefined' && typeof window.fetch === 'function') {
+      if (onProgress) onProgress('Analyzing invoice with Google Cloud Document AI...');
+      const base64 = await fileToBase64(file);
+      const res = await fetch(`${supabaseUrl}/functions/v1/parse-invoice`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: supabaseAnonKey,
+          Authorization: `Bearer ${supabaseAnonKey}`,
+        },
+        body: JSON.stringify({
+          fileBase64: base64,
+          mimeType: file.type || 'application/pdf',
+          documentName: file.name,
+        }),
+      });
+
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.data) {
+          const doc = json.data;
+          const currency = (doc.currency as Currency) || userPreferredCurrency;
+          if (onProgress) onProgress('Google Cloud Document AI parsing complete!');
+          return [
+            {
+              merchantName: doc.merchantName,
+              rawString: `${doc.merchantName.toUpperCase().replace(/\s+/g, '_')}*DOC_AI_VERIFIED`,
+              amount: doc.totalAmount,
+              amountStatus: 'verified',
+              currency,
+              date: doc.invoiceDate,
+              renewalDate: doc.renewalDate,
+              paymentSource: doc.paymentMethod,
+              cadence: doc.cadence || 'monthly',
+              category: detectCategoryFromText(doc.merchantName),
+              confidence: 99,
+              isDuplicate: false,
+              isRecurring: true,
+              notes: 'Extracted via Google Cloud Document AI Invoice Parser',
+              detectedAmounts: [doc.totalAmount],
+              subtotal: doc.subtotal,
+              taxAmount: doc.taxAmount,
+            },
+          ];
+        }
+      }
+    }
+  } catch (edgeErr) {
+    console.warn('Google Document AI Edge Function skipped or unconfigured, falling back to local OCR engine:', edgeErr);
+  }
+
+  // 2. Fallback to local production OCR engine
   const extraction = await processInvoiceDocument(file, onProgress, userPreferredCurrency);
 
   const merchant = extraction.merchantName.value || 'Subscription Service';
@@ -811,7 +879,7 @@ function cleanMerchantCandidate(str: string): string | null {
   return clean.split(/\s+/).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 }
 
-function detectCategoryFromText(text: string): SubscriptionCategory {
+export function detectCategoryFromText(text: string): SubscriptionCategory {
   const lower = text.toLowerCase();
   if (/netflix|spotify|disney|hotstar|hulu|prime\s*video|youtube|music|sound|movie|show|streaming|entertain/i.test(lower)) {
     return 'Streaming & Ent';

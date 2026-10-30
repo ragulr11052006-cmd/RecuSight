@@ -660,122 +660,258 @@ const INITIAL_GUIDANCE_HISTORY: CancellationGuidanceHistory[] = [
   },
 ];
 
+// In-memory fallback if localStorage is unavailable (e.g. Node tests, strict private browsing)
+const memoryStore = new Map<string, string>();
+
 // Local Storage Helper Functions
 function getFromStorage<T>(key: string, initialData: T): T {
   try {
-    const raw = localStorage.getItem(STORAGE_PREFIX + key);
-    if (!raw) {
-      localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(initialData));
-      return initialData;
+    if (typeof window !== 'undefined' && window.localStorage && typeof window.localStorage.getItem === 'function') {
+      const raw = window.localStorage.getItem(STORAGE_PREFIX + key);
+      if (!raw) {
+        window.localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(initialData));
+        return initialData;
+      }
+      return JSON.parse(raw);
     }
-    return JSON.parse(raw);
+  } catch {}
+
+  const mem = memoryStore.get(STORAGE_PREFIX + key);
+  if (!mem) {
+    memoryStore.set(STORAGE_PREFIX + key, JSON.stringify(initialData));
+    return initialData;
+  }
+  try {
+    return JSON.parse(mem);
   } catch {
     return initialData;
   }
 }
 
 function saveToStorage<T>(key: string, data: T): void {
+  const serialized = JSON.stringify(data);
   try {
-    localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(data));
-  } catch (err) {
-    console.error('Error saving to localStorage:', err);
-  }
+    if (typeof window !== 'undefined' && window.localStorage && typeof window.localStorage.setItem === 'function') {
+      window.localStorage.setItem(STORAGE_PREFIX + key, serialized);
+    }
+  } catch {}
+  memoryStore.set(STORAGE_PREFIX + key, serialized);
 }
 
 // Data Service APIs with unified fallback and Supabase support
 export const db = {
   // --- Subscriptions ---
   async getSubscriptions(userId: string): Promise<Subscription[]> {
-    if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase
-        .from('subscriptions')
-        .select('*, payment_source:payment_sources(*)')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false });
-      if (!error && data) return data as Subscription[];
+    let supabaseSubs: Subscription[] = [];
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
+
+    if (isSupabaseConfigured && supabase && isUuid) {
+      try {
+        const { data, error } = await supabase
+          .from('subscriptions')
+          .select('*, payment_source:payment_sources(*)')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false });
+        if (!error && data) {
+          supabaseSubs = data as Subscription[];
+        }
+      } catch (err) {
+        console.warn('Supabase getSubscriptions error:', err);
+      }
     }
+
     const all = getFromStorage<Subscription[]>('subscriptions', INITIAL_SUBSCRIPTIONS);
     const sources = getFromStorage<PaymentSource[]>('payment_sources', INITIAL_PAYMENT_SOURCES);
-    return all
-      .filter(s => s.user_id === userId || (userId === 'default-user' || userId === 'demo-user-123' ? s.user_id === 'default-user' : false))
-      .map(s => {
-        const ps = sources.find(p => p.id === s.payment_source_id);
-        let modeLabel: string = s.payment_mode_label || (ps ? ps.display_name : 'UPI AutoPay (Google Pay / PhonePe)');
-        let modeBadge = s.payment_mode_badge;
 
-        // If the subscription has a legacy hardcoded card placeholder
-        const isLegacyPlaceholder =
-          modeLabel === 'HDFC Visa •••• 4090' ||
-          modeLabel === 'SBI Visa •••• 2345' ||
-          modeLabel === 'Card ••4821' ||
-          modeLabel === 'Card •••• 4821';
+    // Merge Supabase subscriptions with locally saved subscriptions for this user
+    // (ensuring subscriptions created locally are never dropped or hidden)
+    const localUserSubs = all.filter((s) => {
+      if (s.user_id === userId) return true;
+      if (
+        (userId === 'default-user' || userId === 'demo-user-123' || userId === 'usr-hendry-sujon') &&
+        (s.user_id === 'default-user' || s.user_id === 'demo-user-123' || s.user_id === 'usr-hendry-sujon')
+      ) {
+        return true;
+      }
+      return false;
+    });
 
-        if (isLegacyPlaceholder) {
-          modeLabel = ps ? ps.display_name : 'UPI AutoPay (Google Pay / PhonePe)';
-        }
+    // Combine Supabase data with local data, avoiding duplicate IDs
+    const combinedMap = new Map<string, Subscription>();
+    // First insert Supabase subscriptions
+    supabaseSubs.forEach((s) => combinedMap.set(s.id, s));
+    // Then merge/overlay local subscriptions (local ones may be newer or un-synced)
+    localUserSubs.forEach((s) => combinedMap.set(s.id, { ...combinedMap.get(s.id), ...s }));
 
-        // Standardize any UPI naming variations to the exact unified label
-        if (
-          modeLabel.toLowerCase().includes('upi') ||
-          modeLabel.toLowerCase().includes('gpay') ||
-          modeLabel.toLowerCase().includes('phonepe')
-        ) {
-          modeLabel = 'UPI AutoPay (Google Pay / PhonePe)';
-          modeBadge = 'UPI AutoPay: Active';
-        }
+    const merged = Array.from(combinedMap.values());
+    const finalSubs = merged.length > 0 ? merged : localUserSubs;
 
-        if (!modeBadge) {
-          const isUpi = modeLabel.toLowerCase().includes('upi');
-          const isCard = modeLabel.toLowerCase().includes('visa') || modeLabel.toLowerCase().includes('card') || modeLabel.toLowerCase().includes('••••');
-          modeBadge = isUpi ? 'UPI AutoPay: Active' : isCard ? 'Card Auto-Debit: Active' : 'AutoPay: Active';
-        }
+    return finalSubs.map((s) => {
+      const ps = sources.find((p) => p.id === s.payment_source_id);
+      let modeLabel: string = s.payment_mode_label || (ps ? ps.display_name : 'UPI AutoPay (Google Pay / PhonePe)');
+      let modeBadge = s.payment_mode_badge;
 
-        return {
-          ...s,
-          payment_source: ps,
-          payment_mode_label: modeLabel,
-          payment_mode_badge: modeBadge,
-        };
-      });
+      // If the subscription has a legacy hardcoded card placeholder
+      const isLegacyPlaceholder =
+        modeLabel === 'HDFC Visa •••• 4090' ||
+        modeLabel === 'SBI Visa •••• 2345' ||
+        modeLabel === 'Card ••4821' ||
+        modeLabel === 'Card •••• 4821';
+
+      if (isLegacyPlaceholder) {
+        modeLabel = ps ? ps.display_name : 'UPI AutoPay (Google Pay / PhonePe)';
+      }
+
+      // Standardize any UPI naming variations to the exact unified label
+      if (
+        modeLabel.toLowerCase().includes('upi') ||
+        modeLabel.toLowerCase().includes('gpay') ||
+        modeLabel.toLowerCase().includes('phonepe')
+      ) {
+        modeLabel = 'UPI AutoPay (Google Pay / PhonePe)';
+        modeBadge = 'UPI AutoPay: Active';
+      }
+
+      if (!modeBadge) {
+        const isUpi = modeLabel.toLowerCase().includes('upi');
+        const isCard =
+          modeLabel.toLowerCase().includes('visa') ||
+          modeLabel.toLowerCase().includes('card') ||
+          modeLabel.toLowerCase().includes('••••');
+        modeBadge = isUpi ? 'UPI AutoPay: Active' : isCard ? 'Card Auto-Debit: Active' : 'AutoPay: Active';
+      }
+
+      return {
+        ...s,
+        payment_source: ps,
+        payment_mode_label: modeLabel,
+        payment_mode_badge: modeBadge,
+      };
+    });
   },
 
   async createSubscription(sub: Omit<Subscription, 'id' | 'created_at' | 'updated_at'>): Promise<Subscription> {
     const now = new Date().toISOString();
+    const newId = 'sub-' + Date.now();
     const newSub: Subscription = {
       ...sub,
-      id: 'sub-' + Date.now(),
+      id: newId,
       created_at: now,
       updated_at: now,
     };
 
+    // 1. Guaranteed immediate LocalStorage persistence so it ALWAYS shows in tracker
+    const list = getFromStorage<Subscription[]>('subscriptions', INITIAL_SUBSCRIPTIONS);
+    const updatedList = [newSub, ...list.filter((s) => s.id !== newId)];
+    saveToStorage('subscriptions', updatedList);
+
+    // 2. If Supabase is configured, sanitize and push to PostgreSQL
     if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase
-        .from('subscriptions')
-        .insert([sub])
-        .select()
-        .single();
-      if (!error && data) return data as Subscription;
+      try {
+        let effectiveUserId = sub.user_id;
+        let isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(effectiveUserId);
+
+        // If not a valid UUID, attempt to use active authenticated Supabase session
+        if (!isUuid) {
+          const authUser = (await supabase.auth.getUser()).data.user;
+          if (authUser?.id) {
+            effectiveUserId = authUser.id;
+            isUuid = true;
+          }
+        }
+
+        if (isUuid) {
+          // Prepare clean payload matching Supabase subscriptions schema ONLY
+          const cleanNextDate =
+            sub.next_billing_date && sub.next_billing_date.trim() ? sub.next_billing_date.trim() : null;
+          const cleanTrialStart =
+            sub.trial_start_date && sub.trial_start_date.trim() ? sub.trial_start_date.trim() : null;
+          const cleanTrialEnd =
+            sub.trial_end_date && sub.trial_end_date.trim() ? sub.trial_end_date.trim() : null;
+
+          const isPsUuid =
+            sub.payment_source_id &&
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sub.payment_source_id);
+
+          const payload: any = {
+            user_id: effectiveUserId,
+            merchant_name: sub.merchant_name,
+            category: sub.category,
+            amount: sub.amount,
+            currency: sub.currency,
+            billing_interval: sub.billing_interval || 1,
+            billing_interval_unit: sub.billing_interval_unit || 'months',
+            status: sub.status || 'active',
+            confidence_status: sub.confidence_status || 'verified',
+            next_billing_date: cleanNextDate,
+            trial_start_date: cleanTrialStart,
+            trial_end_date: cleanTrialEnd,
+            payment_source_id: isPsUuid ? sub.payment_source_id : null,
+            mandate_reference: sub.mandate_reference || null,
+            notes: sub.notes || null,
+            website_url: sub.website_url || null,
+            cancellation_url: sub.cancellation_url || null,
+          };
+
+          const { data, error } = await supabase
+            .from('subscriptions')
+            .insert([payload])
+            .select()
+            .single();
+
+          if (!error && data) {
+            const serverSub: Subscription = {
+              ...newSub,
+              ...data,
+              payment_mode_label: sub.payment_mode_label,
+              payment_mode_badge: sub.payment_mode_badge,
+            };
+            const syncedList = [serverSub, ...list.filter((s) => s.id !== newId && s.id !== data.id)];
+            saveToStorage('subscriptions', syncedList);
+            return serverSub;
+          } else if (error) {
+            console.warn('Supabase subscription insert error, falling back to local record:', error.message);
+          }
+        }
+      } catch (err) {
+        console.warn('Supabase createSubscription exception, fallback to local record:', err);
+      }
     }
 
-    const list = getFromStorage<Subscription[]>('subscriptions', INITIAL_SUBSCRIPTIONS);
-    list.unshift(newSub);
-    saveToStorage('subscriptions', list);
     return newSub;
   },
 
   async updateSubscription(id: string, updates: Partial<Subscription>): Promise<Subscription | null> {
-    if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase
-        .from('subscriptions')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
-      if (!error && data) return data as Subscription;
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    if (isSupabaseConfigured && supabase && isUuid) {
+      try {
+        const cleanUpdates = { ...updates };
+        delete cleanUpdates.payment_mode_label;
+        delete cleanUpdates.payment_mode_badge;
+        delete cleanUpdates.payment_source;
+
+        const { data, error } = await supabase
+          .from('subscriptions')
+          .update(cleanUpdates)
+          .eq('id', id)
+          .select()
+          .single();
+        if (!error && data) {
+          const list = getFromStorage<Subscription[]>('subscriptions', INITIAL_SUBSCRIPTIONS);
+          const idx = list.findIndex((s) => s.id === id);
+          if (idx !== -1) {
+            list[idx] = { ...list[idx], ...data, ...updates };
+            saveToStorage('subscriptions', list);
+          }
+          return { ...data, ...updates } as Subscription;
+        }
+      } catch (err) {
+        console.warn('Supabase updateSubscription error:', err);
+      }
     }
 
     const list = getFromStorage<Subscription[]>('subscriptions', INITIAL_SUBSCRIPTIONS);
-    const idx = list.findIndex(s => s.id === id);
+    const idx = list.findIndex((s) => s.id === id);
     if (idx === -1) return null;
     list[idx] = { ...list[idx], ...updates, updated_at: new Date().toISOString() };
     saveToStorage('subscriptions', list);
@@ -783,13 +919,17 @@ export const db = {
   },
 
   async deleteSubscription(id: string): Promise<boolean> {
-    if (isSupabaseConfigured && supabase) {
-      const { error } = await supabase.from('subscriptions').delete().eq('id', id);
-      if (!error) return true;
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    if (isSupabaseConfigured && supabase && isUuid) {
+      try {
+        await supabase.from('subscriptions').delete().eq('id', id);
+      } catch (err) {
+        console.warn('Supabase deleteSubscription error:', err);
+      }
     }
 
     const list = getFromStorage<Subscription[]>('subscriptions', INITIAL_SUBSCRIPTIONS);
-    const filtered = list.filter(s => s.id !== id);
+    const filtered = list.filter((s) => s.id !== id);
     saveToStorage('subscriptions', filtered);
     return true;
   },
@@ -861,18 +1001,28 @@ export const db = {
       updated_at: now,
     };
 
-    if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase
-        .from('reminders')
-        .insert([reminder])
-        .select()
-        .single();
-      if (!error && data) return data as Reminder;
-    }
-
     const list = getFromStorage<Reminder[]>('reminders', INITIAL_REMINDERS);
     list.push(newRem);
     saveToStorage('reminders', list);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const isUserUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(reminder.user_id);
+        const isSubUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(reminder.subscription_id);
+
+        if (isUserUuid && isSubUuid) {
+          const { data, error } = await supabase
+            .from('reminders')
+            .insert([reminder])
+            .select()
+            .single();
+          if (!error && data) return data as Reminder;
+        }
+      } catch (err) {
+        console.warn('Supabase createReminder error:', err);
+      }
+    }
+
     return newRem;
   },
 

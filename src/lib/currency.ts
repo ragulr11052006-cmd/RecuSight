@@ -45,3 +45,43 @@ export function getCurrencyFormatter(preferredCurrency: Currency = 'USD') {
     return formatCurrencyAmount(amount, preferredCurrency, fromCurrency, { decimals });
   };
 }
+
+/**
+ * Accurately normalize any subscription amount into its true monthly commitment
+ * based on billing unit (e.g. yearly plans / 12, weekly plans * 52 / 12)
+ */
+export function calculateNormalizedMonthly(
+  amount: number,
+  unit?: string,
+  interval: number = 1
+): number {
+  if (!amount || isNaN(amount) || amount <= 0) return 0;
+  const safeInterval = interval && interval > 0 ? interval : 1;
+  const cleanUnit = (unit || 'months').toLowerCase();
+
+  if (cleanUnit.startsWith('year') || cleanUnit === 'annually' || cleanUnit === 'annual') {
+    return amount / (12 * safeInterval);
+  }
+  if (cleanUnit === 'quarterly' || cleanUnit.startsWith('quarter')) {
+    return amount / (3 * safeInterval);
+  }
+  if (cleanUnit.startsWith('week')) {
+    return (amount * 52) / (12 * safeInterval);
+  }
+  if (cleanUnit.startsWith('day')) {
+    return (amount * 30.41) / safeInterval;
+  }
+  // Default: monthly
+  return amount / safeInterval;
+}
+
+/**
+ * Accurately calculate annual run rate from monthly equivalent
+ */
+export function calculateNormalizedAnnual(
+  amount: number,
+  unit?: string,
+  interval: number = 1
+): number {
+  return calculateNormalizedMonthly(amount, unit, interval) * 12;
+}
