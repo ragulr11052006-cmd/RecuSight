@@ -650,6 +650,11 @@ export function isValidMerchantName(name: string | null | undefined): boolean {
   if (/^[LU][0-9]{5}[A-Z]{2}[0-9]{4}[A-Z]{3}[0-9]{6}$/i.test(trimmed)) return false; // CIN
   if (/^(?:txn|ref|inv|cin|gstin|pan|po|order)[-_\s0-9]{4,}/i.test(trimmed)) return false;
 
+  // Cannot be a physical address or postal location line
+  if (/\b(?:plot|street|road|rd\b|st\b|ave\b|avenue|floor|fl\b|suite|ste\b|block|bldg|building|tower|plaza|sector|cross|phase|pin\s*code|pincode|\b\d{5,6}\b)\b/i.test(trimmed)) {
+    return false;
+  }
+
   const normalized = trimmed
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, ' ')
@@ -666,7 +671,8 @@ export function isValidMerchantName(name: string | null | undefined): boolean {
     'details', 'recipient', 'receiver', 'customer', 'client', 'buyer', 'consignee',
     'billed to', 'bill to', 'shipped to', 'ship to', 'invoice details', 'payment details',
     'tax invoice', 'original for', 'duplicate for', 'authorized signatory', 'terms and conditions',
-    'particulars', 'description of', 'order summary', 'gstin', 'pan number'
+    'particulars', 'description of', 'order summary', 'gstin', 'pan number',
+    'invoice', 'invoice no', 'invoice number', 'receipt', 'receipt no', 'bill', 'statement', 'order'
   ];
   for (const p of genericPrefixes) {
     if (normalized === p || normalized.startsWith(p + ' ')) {
@@ -689,7 +695,7 @@ export function cleanMerchantCandidate(str: string): string | null {
     return null;
   }
   const stripped = str
-    .replace(/["'#*<>~@!?^&+=/\\|~`%$;:]+/g, ' ')
+    .replace(/["'*<>~@!?^+=\\/|~`%$;:]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 
@@ -728,9 +734,9 @@ export function identifyMerchant(
 
   // 1. Explicit labeled issuer / seller / vendor in invoice text
   const labeledVendorRegex = [
-    /(?:billed\s*by|sold\s*by|seller\s*name|provider\s*name|company\s*name|merchant\s*name|service\s*provider|supplier\s*name|supplier|issued\s*by|payee)[:\s]+([^\r\n,;]+)/i,
-    /(?:invoice\s*from|receipt\s*from|payment\s*to|subscription\s*to)[:\s]+([^\r\n,;]+)/i,
-    /(?:thank\s*you\s*for\s*(?:your\s*)?(?:business\s*with|subscribing\s*to|payment\s*to))[:\s]+([^\r\n,;!.]+)/i,
+    /(?:billed\s*by|sold\s*by|seller(?:\s*name)?|provider(?:\s*name)?|company(?:\s*name)?|merchant(?:\s*name)?|service\s*provider|supplier(?:\s*name)?|supplier|issued\s*by|payee|organization|business\s*name|institute|academy|platform|host)[:\s]+([^\r\n,;]+)/i,
+    /(?:invoice\s*from|receipt\s*from|payment\s*to|subscription\s*to|welcome\s*to)[:\s]+([^\r\n,;]+)/i,
+    /(?:thank\s*you\s*for\s*(?:your\s*)?(?:business\s*with|subscribing\s*to|payment\s*to|choosing|joining))[:\s]+([^\r\n,;!.]+)/i,
   ];
 
   for (const regex of labeledVendorRegex) {

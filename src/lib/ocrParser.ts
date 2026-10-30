@@ -429,8 +429,23 @@ export async function parseDocument(
         if (json.success && json.data) {
           const doc = json.data;
           const currency = (doc.currency as Currency) || userPreferredCurrency;
-          const hasValidMerchant = Boolean(doc.merchantName && isValidMerchantName(doc.merchantName));
-          const merchantName = hasValidMerchant ? doc.merchantName : '';
+          let hasValidMerchant = Boolean(doc.merchantName && isValidMerchantName(doc.merchantName));
+          let merchantName = hasValidMerchant ? doc.merchantName : '';
+
+          // If Document AI did not identify the merchant name for an unknown commodity,
+          // extract the authentic merchant name from the local invoice document!
+          if (!hasValidMerchant || !merchantName) {
+            try {
+              const localDoc = await processInvoiceDocument(file, undefined, userPreferredCurrency);
+              if (localDoc.merchantName.value && isValidMerchantName(localDoc.merchantName.value)) {
+                merchantName = localDoc.merchantName.value;
+                hasValidMerchant = true;
+              }
+            } catch (fallbackErr) {
+              console.warn('Local merchant extraction fallback failed:', fallbackErr);
+            }
+          }
+
           const confidence = doc.confidence !== undefined ? doc.confidence : (hasValidMerchant ? 85 : 40);
           const amountStatus: 'verified' | 'uncertain' | 'not_found' =
             doc.totalAmount === null || doc.totalAmount === undefined
