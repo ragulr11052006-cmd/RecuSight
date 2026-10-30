@@ -4,7 +4,24 @@
 
 @layer base {
   body {
-    @apply bg-[#F8FAFC] text-slate-800 antialiased selection:bg-blue-500/20 selection:text-blue-900;
+    @apply bg-[#F8FAFC] dark:bg-[#0B0F19] text-slate-800 dark:text-slate-100 antialiased selection:bg-blue-500/20 selection:text-blue-900 min-h-screen;
+  }
+
+  /* Date & time inputs in dark mode: fix calendar / clock picker icon visibility */
+  .dark input[type="date"]::-webkit-calendar-picker-indicator,
+  .dark input[type="time"]::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+    cursor: pointer;
+    opacity: 0.8;
+  }
+  .dark input[type="date"]::-webkit-calendar-picker-indicator:hover,
+  .dark input[type="time"]::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
+  }
+
+  /* Proper focus rings for keyboard navigation (WCAG 2.4.7 Focus Visible) */
+  :focus-visible {
+    @apply outline-none ring-2 ring-[#2446D8] dark:ring-[#3B82F6] ring-offset-2 dark:ring-offset-slate-900;
   }
 }
 

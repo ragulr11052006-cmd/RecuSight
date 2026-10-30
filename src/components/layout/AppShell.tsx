@@ -143,6 +143,7 @@ export const AppShell: React.FC = () => {
             </NavLink>
             <button
               onClick={() => setMobileMenuOpen(false)}
+              aria-label="Close menu"
               className="lg:hidden text-slate-400 hover:text-slate-600 dark:hover:text-white p-1"
             >
               <X className="w-5 h-5" />
@@ -222,6 +223,7 @@ export const AppShell: React.FC = () => {
                 <button
                   type="button"
                   onClick={toggleTheme}
+                  aria-label="Toggle Dark Mode"
                   className={`w-10 h-5 rounded-full transition-colors relative p-0.5 cursor-pointer ${
                     theme === 'dark' ? 'bg-[#2446D8]' : 'bg-slate-200'
                   }`}
@@ -287,6 +289,7 @@ export const AppShell: React.FC = () => {
               await signOut();
               navigate('/login', { replace: true });
             }}
+            aria-label="Sign Out"
             title="Sign Out"
             className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors cursor-pointer"
           >
@@ -300,16 +303,17 @@ export const AppShell: React.FC = () => {
       {/* ========================================================= */}
       <div className="flex-1 lg:pl-72 flex flex-col min-w-0">
         {/* TOP COMMAND & GREETING HEADER */}
-        <header className="sticky top-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-100 dark:border-slate-800 px-6 lg:px-8 py-3.5 flex items-center justify-between gap-4">
+        <header className="sticky top-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-100 dark:border-slate-800 px-4 sm:px-6 lg:px-8 py-3 sm:py-3.5 flex items-center justify-between gap-2.5 sm:gap-4">
           {/* Left: Mobile trigger & Greeting */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 sm:flex-initial">
             <button
               onClick={() => setMobileMenuOpen(true)}
-              className="lg:hidden p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+              aria-label="Open mobile menu"
+              className="lg:hidden p-1.5 sm:p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0"
             >
               <Menu className="w-5 h-5" />
             </button>
-            <h1 className="text-lg lg:text-xl font-extrabold text-[#151B2D] dark:text-white tracking-tight">
+            <h1 className="text-base sm:text-lg lg:text-xl font-extrabold text-[#151B2D] dark:text-white tracking-tight truncate max-w-[150px] xs:max-w-[200px] sm:max-w-none">
               Hello, {user?.display_name || user?.email?.split('@')[0] || 'User'}!
             </h1>
           </div>
@@ -320,6 +324,7 @@ export const AppShell: React.FC = () => {
               <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
+                aria-label="Search subscriptions"
                 placeholder="Search by name,subscriptions....."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -329,12 +334,14 @@ export const AppShell: React.FC = () => {
           </div>
 
           {/* Right: Currency Switcher, Notification Bell & Profile Pill */}
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
             {/* Preferred Currency Switcher Pill */}
             <div className="relative">
               <button
                 type="button"
                 onClick={() => setCurrencyDropdownOpen(!currencyDropdownOpen)}
+                aria-label="Change Preferred Display Currency"
+                aria-expanded={currencyDropdownOpen}
                 className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-bold text-slate-800 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-2xs transition-colors"
                 title="Change Preferred Display Currency"
               >
@@ -387,6 +394,8 @@ export const AppShell: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setNotificationOpen(!notificationOpen)}
+                aria-label="Notifications"
+                aria-expanded={notificationOpen}
                 className="w-9 h-9 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-xs relative transition-colors cursor-pointer"
                 title="Notifications"
               >
@@ -474,6 +483,8 @@ export const AppShell: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setUserDropdownOpen(!userDropdownOpen)}
+                aria-label="User profile menu"
+                aria-expanded={userDropdownOpen}
                 className="flex items-center gap-2.5 pl-1 pr-2 py-1 rounded-full hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
               >
                 <div className="w-9 h-9 rounded-full overflow-hidden bg-blue-100 dark:bg-blue-950 text-[#2446D8] dark:text-blue-300 font-bold text-xs flex items-center justify-center shadow-xs shrink-0 border border-slate-200 dark:border-slate-700">

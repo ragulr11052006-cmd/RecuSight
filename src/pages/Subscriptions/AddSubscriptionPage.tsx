@@ -132,41 +132,33 @@ export const AddSubscriptionPage: React.FC = () => {
   };
 
   const userPreferredCurrency = user?.preferred_currency || 'USD';
-  const [candidates, setCandidates] = useState<ParsedTransaction[]>(() =>
-    getDefaultCandidates(userPreferredCurrency)
-  );
+  const [candidates, setCandidates] = useState<ParsedTransaction[]>([]);
   const [selectedCandidateIndex, setSelectedCandidateIndex] = useState<number>(0);
 
   // Editable Form fields on Right Column (synced with selected candidate)
-  const [formMerchantName, setFormMerchantName] = useState('FastSpring (Paddle / MacPaw)');
+  const [formMerchantName, setFormMerchantName] = useState('');
   const [formCategory, setFormCategory] = useState<SubscriptionCategory>('Software & Tools');
-  const [formAmount, setFormAmount] = useState(userPreferredCurrency === 'INR' ? '2499.00' : '29.00');
+  const [formAmount, setFormAmount] = useState('');
   const [formCurrency, setFormCurrency] = useState<Currency>(userPreferredCurrency);
   const [formCadence, setFormCadence] = useState<'monthly' | 'yearly' | 'unknown'>('monthly');
-  const [formCadencePrompt, setFormCadencePrompt] = useState(true);
-  const [formRenewalDate, setFormRenewalDate] = useState('2026-11-26');
-  const [formPaymentSourceId, setFormPaymentSourceId] = useState('HDFC Visa Signature ending in •••• 4092');
-  const [formUnconfirmedEstimate, setFormUnconfirmedEstimate] = useState(true);
+  const [formCadencePrompt, setFormCadencePrompt] = useState(false);
+  const [formRenewalDate, setFormRenewalDate] = useState('');
+  const [formPaymentSourceId, setFormPaymentSourceId] = useState('');
+  const [formUnconfirmedEstimate, setFormUnconfirmedEstimate] = useState(false);
 
   // ==========================================
   // STATE FOR MANUAL ENTRY WORKFLOW (Screenshot 2)
   // ==========================================
-  const [manualMerchantName, setManualMerchantName] = useState('Figma Organization');
+  const [manualMerchantName, setManualMerchantName] = useState('');
   const [manualCategory, setManualCategory] = useState<SubscriptionCategory>('Software & Dev');
   const [manualCurrency, setManualCurrency] = useState<Currency>(userPreferredCurrency);
-  const [manualAmount, setManualAmount] = useState(userPreferredCurrency === 'INR' ? '1299.00' : '15.00');
+  const [manualAmount, setManualAmount] = useState('');
 
   // React to user preferred currency changes in profile
   useEffect(() => {
     const cur = user?.preferred_currency || 'USD';
-    const isINR = cur === 'INR';
-    if (!file) {
-      setFormCurrency(cur);
-      setFormAmount(isINR ? '2499.00' : '29.00');
-      setCandidates(getDefaultCandidates(cur));
-      setManualCurrency(cur);
-      setManualAmount(isINR ? '1299.00' : '15.00');
-    }
+    setFormCurrency(cur);
+    setManualCurrency(cur);
   }, [user?.preferred_currency]);
 
   const handleManualCurrencyChange = (newCurrency: Currency) => {
@@ -188,19 +180,19 @@ export const AddSubscriptionPage: React.FC = () => {
   };
 
   const [manualCadence, setManualCadence] = useState<'monthly' | 'annually' | 'quarterly' | 'custom'>('monthly');
-  const [manualNextDate, setManualNextDate] = useState('2026-10-31');
+  const [manualNextDate, setManualNextDate] = useState('');
   const [manualPaymentInstrument, setManualPaymentInstrument] = useState<string>(
     userPreferredCurrency === 'INR' ? 'upi_mandate' : 'hdfc_corp'
   );
-  const [manualMandateRef, setManualMandateRef] = useState('UMN-99201-FGMA');
+  const [manualMandateRef, setManualMandateRef] = useState('');
   const [manualAlert7Days, setManualAlert7Days] = useState(true);
   const [manualAlert2Days, setManualAlert2Days] = useState(true);
   const [manualAlertConfirmation, setManualAlertConfirmation] = useState(false);
   const [manualTargetEmail, setManualTargetEmail] = useState(true);
   const [manualTargetInApp, setManualTargetInApp] = useState(false);
   const [manualTargetSMS, setManualTargetSMS] = useState(false);
-  const [isTrial, setIsTrial] = useState(true);
-  const [trialEndDate, setTrialEndDate] = useState('2026-10-28');
+  const [isTrial, setIsTrial] = useState(false);
+  const [trialEndDate, setTrialEndDate] = useState('');
 
   // Modal State for Link New Payment Rail
   const [isAddRailModalOpen, setIsAddRailModalOpen] = useState(false);
@@ -296,27 +288,76 @@ export const AddSubscriptionPage: React.FC = () => {
     try {
       const prefCur = user?.preferred_currency || 'USD';
       const extracted = await parseDocument(uploadedFile, (msg) => setStatusMessage(msg), prefCur);
-      const defaultList = getDefaultCandidates(prefCur);
-      const finalList = extracted.length > 0 ? extracted : defaultList;
-      setCandidates(finalList);
-      setSelectedCandidateIndex(0);
-      setExtractionDone(true);
+      if (extracted.length > 0) {
+        setCandidates(extracted);
+        setSelectedCandidateIndex(0);
+        setExtractionDone(true);
 
-      const primaryCand = finalList[0];
-      if (primaryCand) {
-        setFormCurrency(primaryCand.currency);
-        setFormAmount(primaryCand.amount.toFixed(2));
-        setFormMerchantName(primaryCand.merchantName);
-        setFormCategory(primaryCand.category);
-        setFormCadence(primaryCand.cadence === 'yearly' ? 'yearly' : 'monthly');
-        setFormRenewalDate(primaryCand.renewalDate || primaryCand.date);
+        const primaryCand = extracted[0];
+        if (primaryCand) {
+          setFormCurrency(primaryCand.currency);
+          setFormAmount(primaryCand.amount.toFixed(2));
+          setFormMerchantName(primaryCand.merchantName);
+          setFormCategory(primaryCand.category);
+          setFormCadence(primaryCand.cadence === 'yearly' ? 'yearly' : 'monthly');
+          setFormRenewalDate(primaryCand.renewalDate || primaryCand.date);
+          setFormPaymentSourceId(prefCur === 'INR' ? 'HDFC Bank Salary A/c •••• 4092' : 'Corporate Card •••• 4092');
+          setFormUnconfirmedEstimate(primaryCand.confidence < 80);
+        }
+      } else {
+        const cleanName = uploadedFile.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+        const customCand: ParsedTransaction = {
+          merchantName: cleanName,
+          rawString: uploadedFile.name,
+          amount: 0,
+          currency: prefCur,
+          date: new Date().toISOString().split('T')[0],
+          renewalDate: '',
+          cadence: 'monthly',
+          category: 'Software & Tools',
+          confidence: 60,
+          isDuplicate: false,
+          isRecurring: true,
+          notes: 'Uploaded document',
+          detectedAmounts: [],
+          ocrSnippet: `Uploaded file: ${uploadedFile.name}`,
+        };
+        setCandidates([customCand]);
+        setSelectedCandidateIndex(0);
+        setExtractionDone(true);
+        setFormCurrency(prefCur);
+        setFormAmount('');
+        setFormMerchantName(cleanName);
+        setFormCategory('Software & Tools');
+        setFormCadence('monthly');
+        setFormRenewalDate('');
+        setFormPaymentSourceId('');
+        setFormUnconfirmedEstimate(true);
       }
     } catch (err) {
       console.error('Extraction error:', err);
-      const defaultList = getDefaultCandidates(user?.preferred_currency || 'USD');
-      setCandidates(defaultList);
+      const cleanName = uploadedFile.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+      const fallbackCand: ParsedTransaction = {
+        merchantName: cleanName,
+        rawString: uploadedFile.name,
+        amount: 0,
+        currency: user?.preferred_currency || 'USD',
+        date: new Date().toISOString().split('T')[0],
+        renewalDate: '',
+        cadence: 'monthly',
+        category: 'Software & Tools',
+        confidence: 50,
+        isDuplicate: false,
+        isRecurring: true,
+        notes: 'File scan complete',
+        detectedAmounts: [],
+        ocrSnippet: uploadedFile.name,
+      };
+      setCandidates([fallbackCand]);
       setSelectedCandidateIndex(0);
       setExtractionDone(true);
+      setFormMerchantName(cleanName);
+      setFormAmount('');
     } finally {
       setIsProcessing(false);
     }
@@ -335,6 +376,12 @@ export const AddSubscriptionPage: React.FC = () => {
     if (defaultList[0]) {
       setFormCurrency(defaultList[0].currency);
       setFormAmount(defaultList[0].amount.toFixed(2));
+      setFormMerchantName(defaultList[0].merchantName);
+      setFormCategory(defaultList[0].category);
+      setFormCadence(defaultList[0].cadence === 'yearly' ? 'yearly' : 'monthly');
+      setFormRenewalDate(defaultList[0].renewalDate || defaultList[0].date);
+      setFormPaymentSourceId(user?.preferred_currency === 'INR' ? 'HDFC Bank Salary A/c •••• 4092' : 'HDFC Visa Signature ending in •••• 4092');
+      setFormUnconfirmedEstimate(defaultList[0].confidence < 80);
     }
   };
 
@@ -346,10 +393,13 @@ export const AddSubscriptionPage: React.FC = () => {
     setFile(null);
     setExtractionDone(false);
     const cur = user?.preferred_currency || 'USD';
-    const defaultList = getDefaultCandidates(cur);
-    setCandidates(defaultList);
+    setCandidates([]);
     setFormCurrency(cur);
-    setFormAmount(cur === 'INR' ? '2499.00' : '29.00');
+    setFormAmount('');
+    setFormMerchantName('');
+    setFormRenewalDate('');
+    setFormPaymentSourceId('');
+    setFormUnconfirmedEstimate(false);
   };
 
   const handleLinkNewRail = (e: React.FormEvent) => {
@@ -496,7 +546,7 @@ export const AddSubscriptionPage: React.FC = () => {
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
               activeTab === 'upload'
                 ? 'bg-[#2446D8] text-white shadow-xs'
-                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
+                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
             <FileText className="w-3.5 h-3.5" />
@@ -509,7 +559,7 @@ export const AddSubscriptionPage: React.FC = () => {
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
               activeTab === 'manual'
                 ? 'bg-[#2446D8] text-white shadow-xs'
-                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
+                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
             <SlidersHorizontal className="w-3.5 h-3.5" />
@@ -581,7 +631,7 @@ export const AddSubscriptionPage: React.FC = () => {
                     <div className="mt-5 flex flex-col gap-2">
                       <button
                         type="button"
-                        className="py-2 px-5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-white text-xs font-bold shadow-xs hover:bg-slate-50"
+                        className="py-2 px-5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-white text-xs font-bold shadow-xs hover:bg-slate-50 dark:hover:bg-slate-700"
                       >
                         Browse Files
                       </button>
@@ -635,8 +685,8 @@ export const AddSubscriptionPage: React.FC = () => {
 
                   <div className="p-3.5 rounded-2xl bg-[#F8FAFC] dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-xl bg-white dark:bg-slate-700 border border-slate-200 flex items-center justify-center font-bold text-slate-700 text-xs shadow-2xs">
-                        <FileText className="w-4 h-4 text-[#2446D8]" />
+                      <div className="w-9 h-9 rounded-xl bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 flex items-center justify-center font-bold text-slate-700 dark:text-slate-200 text-xs shadow-2xs">
+                        <FileText className="w-4 h-4 text-[#2446D8] dark:text-blue-400" />
                       </div>
                       <div>
                         <span className="text-xs font-bold text-slate-900 dark:text-white block truncate max-w-[180px]">
@@ -648,8 +698,8 @@ export const AddSubscriptionPage: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-bold flex items-center gap-1.5 border border-emerald-200">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
+                    <div className="px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-[11px] font-bold flex items-center gap-1.5 border border-emerald-200 dark:border-emerald-800">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 dark:bg-emerald-400" />
                       <span>{candidates.length} Detected</span>
                     </div>
                   </div>
@@ -715,19 +765,19 @@ export const AddSubscriptionPage: React.FC = () => {
 
                         {/* Status / Duplicate Banner */}
                         {cand.isDuplicate && (
-                          <div className="mt-3 p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-[11px] leading-tight flex items-start gap-2">
-                            <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
+                          <div className="mt-3 p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200 text-[11px] leading-tight flex items-start gap-2">
+                            <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
                             <div>
                               <p className="font-bold">Matches Existing Subscription '{cand.duplicateMerchant}'</p>
-                              <p className="text-slate-600 mt-0.5">Duplicate candidate detected! Review without overwriting confirmed data.</p>
+                              <p className="text-slate-600 dark:text-slate-400 mt-0.5">Duplicate candidate detected! Review without overwriting confirmed data.</p>
                             </div>
                           </div>
                         )}
 
                         {!cand.isDuplicate && cand.isRecurring && (
                           <div className="mt-3 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                            <span className="text-purple-700 text-[11px] font-semibold flex items-center gap-1.5">
-                              <span className="w-1.5 h-1.5 rounded-full bg-purple-600" />
+                            <span className="text-purple-700 dark:text-purple-300 text-[11px] font-semibold flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-purple-600 dark:bg-purple-400" />
                               <span>Possible Subscription (Needs Review)</span>
                             </span>
                           </div>
@@ -735,7 +785,7 @@ export const AddSubscriptionPage: React.FC = () => {
 
                         {!cand.isRecurring && (
                           <div className="mt-3 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end">
-                            <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[10px] font-semibold">
+                            <span className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-semibold">
                               One-off Excluded
                             </span>
                           </div>
@@ -771,7 +821,9 @@ export const AddSubscriptionPage: React.FC = () => {
             <div className="p-3.5 rounded-2xl bg-purple-50/70 dark:bg-purple-950/30 border border-purple-100 dark:border-purple-900/50 flex items-start gap-2.5">
               <ShieldAlert className="w-4 h-4 text-purple-700 dark:text-purple-300 shrink-0 mt-0.5" />
               <p className="text-xs text-purple-900 dark:text-purple-300 leading-relaxed">
-                Extracted values are suggestions. Review and confirm before saving. Unknown information is preserved rather than guessed.
+                {activeCandidate
+                  ? 'Extracted values are suggestions. Review and confirm before saving. Unknown information is preserved rather than guessed.'
+                  : 'Upload an invoice or statement on the left to extract recurring subscriptions automatically, or review and confirm details below.'}
               </p>
             </div>
 
@@ -783,10 +835,16 @@ export const AddSubscriptionPage: React.FC = () => {
                   <label className="font-bold text-slate-800 dark:text-slate-200">
                     Service / Merchant Name *
                   </label>
-                  <span className="text-[11px] font-semibold text-purple-700 flex items-center gap-1">
-                    <ShieldCheck className="w-3.5 h-3.5" />
-                    <span>Confidence: Medium ({activeCandidate?.confidence || 68}%)</span>
-                  </span>
+                  {activeCandidate ? (
+                    <span className="text-[11px] font-semibold text-purple-700 dark:text-purple-300 flex items-center gap-1">
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      <span>Confidence: {activeCandidate.confidence >= 80 ? 'High' : 'Medium'} ({activeCandidate.confidence}%)</span>
+                    </span>
+                  ) : (
+                    <span className="text-[11px] text-slate-400">
+                      Required
+                    </span>
+                  )}
                 </div>
                 <div className="relative">
                   <input
@@ -794,15 +852,17 @@ export const AddSubscriptionPage: React.FC = () => {
                     required
                     value={formMerchantName}
                     onChange={(e) => setFormMerchantName(e.target.value)}
-                    placeholder="FastSpring (Paddle / MacPaw)"
+                    placeholder="e.g. Netflix, Figma, Adobe"
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-[#F8FAFC] dark:bg-slate-800 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#2446D8]/20 focus:border-[#2446D8]"
                   />
-                  <button type="button" className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+                  <button type="button" aria-label="Edit merchant name" className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400">
                     ✎
                   </button>
                 </div>
                 <span className="text-[11px] italic text-slate-400 block mt-1">
-                  Identified via transaction string '{activeCandidate?.rawString || 'FS*FASTSPRING.NET 877-327-8914'}'
+                  {activeCandidate?.rawString
+                    ? `Identified via transaction string '${activeCandidate.rawString}'`
+                    : 'Enter the provider or service name'}
                 </span>
               </div>
 
@@ -830,24 +890,31 @@ export const AddSubscriptionPage: React.FC = () => {
                 <div className="sm:col-span-6">
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="font-bold text-slate-800 dark:text-slate-200">
-                      Observed Charge
+                      Observed Charge *
                     </label>
-                    <span className="text-[11px] font-bold text-emerald-700 flex items-center gap-1">
-                      <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                      <span>Matched statement</span>
-                    </span>
+                    {activeCandidate ? (
+                      <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                        <span>Matched statement</span>
+                      </span>
+                    ) : (
+                      <span className="text-[11px] text-slate-400">
+                        Recurring charge
+                      </span>
+                    )}
                   </div>
                   <div className="relative flex rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-hidden">
-                    <span className="px-3 py-2.5 font-bold text-slate-500 text-xs bg-slate-50 border-r border-slate-200">
+                    <span className="px-3 py-2.5 font-bold text-slate-500 dark:text-slate-300 text-xs bg-slate-50 dark:bg-slate-700/60 border-r border-slate-200 dark:border-slate-700">
                       {CURRENCY_SYMBOLS[formCurrency] || '$'}
                     </span>
                     <input
                       type="number"
                       step="0.01"
                       required
+                      placeholder="0.00"
                       value={formAmount}
                       onChange={(e) => setFormAmount(e.target.value)}
-                      className="w-full px-3 py-2.5 text-xs font-bold text-slate-900 dark:text-white focus:outline-none"
+                      className="w-full px-3 py-2.5 text-xs font-bold text-slate-900 dark:text-white bg-transparent focus:outline-none"
                     />
                     <select
                       value={formCurrency}
@@ -869,13 +936,15 @@ export const AddSubscriptionPage: React.FC = () => {
                   <label className="font-bold text-slate-800 dark:text-slate-200">
                     Billing Cadence / Frequency
                   </label>
-                  <span className="px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 text-[10px] font-semibold border border-purple-200">
-                    Unverified Assumption
-                  </span>
+                  {activeCandidate ? (
+                    <span className="px-2 py-0.5 rounded-md bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 text-[10px] font-semibold border border-purple-200 dark:border-purple-800">
+                      Suggested
+                    </span>
+                  ) : null}
                 </div>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   {[
-                    { id: 'monthly', title: 'Monthly', desc: '(Assumed)' },
+                    { id: 'monthly', title: 'Monthly', desc: '(Standard)' },
                     { id: 'yearly', title: 'Yearly', desc: 'Billed annually' },
                     { id: 'unknown', title: 'Unknown', desc: 'Requires history' },
                   ].map((cad) => (
@@ -885,27 +954,27 @@ export const AddSubscriptionPage: React.FC = () => {
                       onClick={() => setFormCadence(cad.id as any)}
                       className={`p-3 rounded-xl border text-left transition-all ${
                         formCadence === cad.id
-                          ? 'bg-[#EEF2FF] border-2 border-[#2446D8]'
-                          : 'bg-[#F8FAFC] border-slate-200 hover:border-slate-300'
+                          ? 'bg-[#EEF2FF] dark:bg-blue-950/50 border-2 border-[#2446D8] dark:border-blue-500'
+                          : 'bg-[#F8FAFC] dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
                       }`}
                     >
                       <div className="flex items-center gap-2">
                         <div
-                          className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
+                          className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${
                             formCadence === cad.id
-                              ? 'border-[#2446D8] bg-white'
-                              : 'border-slate-400'
+                              ? 'border-[#2446D8] dark:border-blue-500 bg-white dark:bg-slate-900'
+                              : 'border-slate-400 dark:border-slate-500'
                           }`}
                         >
                           {formCadence === cad.id && (
-                            <div className="w-2 h-2 rounded-full bg-[#2446D8]" />
+                            <div className="w-2 h-2 rounded-full bg-[#2446D8] dark:bg-blue-500" />
                           )}
                         </div>
-                        <div>
-                          <span className="block font-bold text-xs text-slate-900 dark:text-white">
+                        <div className="min-w-0">
+                          <span className="block font-bold text-xs text-slate-900 dark:text-white truncate">
                             {cad.title}
                           </span>
-                          <span className="block text-[10px] text-slate-400">
+                          <span className="block text-[10px] text-slate-500 dark:text-slate-400 truncate">
                             {cad.desc}
                           </span>
                         </div>
@@ -921,7 +990,7 @@ export const AddSubscriptionPage: React.FC = () => {
                     onChange={(e) => setFormCadencePrompt(e.target.checked)}
                     className="w-4 h-4 rounded text-[#2446D8]"
                   />
-                  <span className="text-[11px] text-slate-500">
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400">
                     Prompt for 2–3 months statement history to mathematically verify cadence.
                   </span>
                 </label>
@@ -933,20 +1002,24 @@ export const AddSubscriptionPage: React.FC = () => {
                   <label className="font-bold text-slate-800 dark:text-slate-200">
                     Projected Next Renewal
                   </label>
-                  <span className="text-[11px] font-semibold text-purple-700 flex items-center gap-1">
+                  <span className="text-[11px] font-semibold text-purple-700 dark:text-purple-300 flex items-center gap-1">
                     <Calendar className="w-3.5 h-3.5" />
-                    <span>Estimated: Nov 26, 2026</span>
+                    <span>
+                      {formRenewalDate
+                        ? `Estimated: ${new Date(formRenewalDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+                        : 'Select renewal date'}
+                    </span>
                   </span>
                 </div>
                 <input
                   type="date"
                   value={formRenewalDate}
                   onChange={(e) => setFormRenewalDate(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none dark:[color-scheme:dark]"
                 />
 
                 {/* Mark as Unconfirmed Estimate Box */}
-                <div className="p-3.5 rounded-2xl bg-[#EEF2FF] border border-blue-100 mt-2.5">
+                <div className="p-3.5 rounded-2xl bg-[#EEF2FF] dark:bg-slate-800/80 border border-blue-100 dark:border-slate-700 mt-2.5">
                   <label className="flex items-start gap-2.5 cursor-pointer">
                     <input
                       type="checkbox"
@@ -955,10 +1028,10 @@ export const AddSubscriptionPage: React.FC = () => {
                       className="w-4 h-4 rounded text-[#2446D8] mt-0.5"
                     />
                     <div>
-                      <span className="font-bold text-slate-900 text-xs block">
+                      <span className="font-bold text-slate-900 dark:text-white text-xs block">
                         Mark as Unconfirmed Estimate
                       </span>
-                      <span className="text-slate-500 text-[11px] block mt-0.5">
+                      <span className="text-slate-500 dark:text-slate-400 text-[11px] block mt-0.5">
                         Automatic push reminders & calendar alerts stay muted until confirmed.
                       </span>
                     </div>
@@ -971,15 +1044,15 @@ export const AddSubscriptionPage: React.FC = () => {
                 <label className="block font-bold text-slate-800 dark:text-slate-200 mb-1.5">
                   Payment Source Account
                 </label>
-                <div className="p-3 rounded-xl border border-slate-200 bg-[#F8FAFC] flex items-center justify-between">
+                <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-[#F8FAFC] dark:bg-slate-800 flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
-                    <CreditCard className="w-4 h-4 text-blue-600" />
-                    <span className="font-semibold text-xs text-slate-900">
-                      {formPaymentSourceId}
+                    <CreditCard className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                    <span className="font-semibold text-xs text-slate-900 dark:text-white">
+                      {formPaymentSourceId || (userPreferredCurrency === 'INR' ? 'UPI AutoPay / Bank Mandate' : 'Primary Corporate Card')}
                     </span>
                   </div>
-                  <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200">
-                    Matched
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold border border-emerald-200 dark:border-emerald-800">
+                    {formPaymentSourceId ? 'Matched' : 'Default Rail'}
                   </span>
                 </div>
               </div>
@@ -987,20 +1060,20 @@ export const AddSubscriptionPage: React.FC = () => {
               {/* Cancellation Protocol Status */}
               <div className="pt-2">
                 <div className="flex items-center justify-between mb-1">
-                  <div className="flex items-center gap-1.5 font-bold text-xs text-slate-800">
+                  <div className="flex items-center gap-1.5 font-bold text-xs text-slate-800 dark:text-slate-200">
                     <HelpCircle className="w-3.5 h-3.5 text-slate-400" />
                     <span>Cancellation Protocol Status</span>
                   </div>
                   <button
                     type="button"
                     onClick={() => navigate('/cancellation-guidance')}
-                    className="text-[11px] font-bold text-[#2446D8] hover:underline"
+                    className="text-[11px] font-bold text-[#2446D8] dark:text-blue-400 hover:underline"
                   >
                     Open Manual Checklist
                   </button>
                 </div>
-                <p className="text-[11px] text-slate-400 pl-5 leading-normal">
-                  No standard 1-click cancellation guidance available yet for FastSpring vendor accounts.
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 pl-5 leading-normal">
+                  No standard 1-click cancellation guidance available yet for {formMerchantName.trim() || 'this vendor'}.
                 </p>
               </div>
 
@@ -1013,14 +1086,14 @@ export const AddSubscriptionPage: React.FC = () => {
                 onClick={handleDiscardCandidate}
                 className="text-xs font-bold text-red-600 hover:underline px-2 py-1"
               >
-                Discard Item
+                {candidates.length > 0 ? 'Discard Item' : 'Clear Form'}
               </button>
 
               <button
                 type="button"
                 onClick={handleConfirmExtracted}
-                disabled={isSaving}
-                className="py-2.5 px-6 rounded-xl bg-[#2446D8] hover:bg-blue-700 disabled:opacity-70 text-white text-xs font-bold shadow-md shadow-blue-600/20 flex items-center gap-2 transition-all"
+                disabled={isSaving || !formMerchantName.trim() || !formAmount.trim()}
+                className="py-2.5 px-6 rounded-xl bg-[#2446D8] hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold shadow-md shadow-blue-600/20 flex items-center gap-2 transition-all cursor-pointer"
               >
                 {isSaving ? (
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -1051,7 +1124,7 @@ export const AddSubscriptionPage: React.FC = () => {
             <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs space-y-4">
               <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
                 <div className="flex items-center gap-2.5">
-                  <span className="w-6 h-6 rounded-lg bg-blue-50 text-[#2446D8] font-bold text-xs flex items-center justify-center">
+                  <span className="w-6 h-6 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-[#2446D8] dark:text-blue-400 font-bold text-xs flex items-center justify-center">
                     1
                   </span>
                   <h2 className="font-bold text-sm text-slate-900 dark:text-white">
@@ -1076,21 +1149,23 @@ export const AddSubscriptionPage: React.FC = () => {
                     required
                     value={manualMerchantName}
                     onChange={(e) => setManualMerchantName(e.target.value)}
-                    placeholder="Figma Organization"
+                    placeholder="e.g. Netflix, Figma, GitHub"
                     className="w-full pl-10 pr-28 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#2446D8]"
                   />
-                  <div className="absolute right-2.5 top-1/2 -translate-y-1/2">
-                    <span className="px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200 flex items-center gap-1">
-                      <Check className="w-3 h-3 text-emerald-600" />
-                      <span>Recognized</span>
-                    </span>
-                  </div>
+                  {manualMerchantName.trim() && (
+                    <div className="absolute right-2.5 top-1/2 -translate-y-1/2">
+                      <span className="px-2.5 py-1 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold border border-emerald-200 dark:border-emerald-800 flex items-center gap-1">
+                        <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                        <span>Recognized</span>
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
 
               {/* Quick Picks */}
               <div>
-                <span className="text-xs text-slate-500 font-medium block mb-2">
+                <span className="text-xs text-slate-500 dark:text-slate-400 font-medium block mb-2">
                   Quick Picks:
                 </span>
                 <div className="flex flex-wrap gap-1.5">
@@ -1102,7 +1177,7 @@ export const AddSubscriptionPage: React.FC = () => {
                       className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${
                         manualMerchantName === item
                           ? 'bg-[#2446D8] text-white'
-                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 hover:bg-slate-200'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                       }`}
                     >
                       {item}
@@ -1116,7 +1191,7 @@ export const AddSubscriptionPage: React.FC = () => {
                 <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-2">
                   Expenditure Category *
                 </label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {CATEGORIES.map((cat) => {
                     const Icon = cat.icon;
                     const isSelected = manualCategory === cat.id;
@@ -1127,11 +1202,11 @@ export const AddSubscriptionPage: React.FC = () => {
                         onClick={() => setManualCategory(cat.id as SubscriptionCategory)}
                         className={`p-3 rounded-2xl border text-left transition-all ${
                           isSelected
-                            ? 'bg-[#EEF2FF] border-[#2446D8] text-[#2446D8]'
-                            : 'bg-white dark:bg-slate-800 border-slate-200 hover:border-slate-300 text-slate-700'
+                            ? 'bg-[#EEF2FF] dark:bg-blue-950/50 border-[#2446D8] dark:border-blue-500 text-[#2446D8] dark:text-blue-400'
+                            : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 text-slate-700 dark:text-slate-300'
                         }`}
                       >
-                        <Icon className={`w-4 h-4 mb-1.5 ${isSelected ? 'text-[#2446D8]' : 'text-slate-500'}`} />
+                        <Icon className={`w-4 h-4 mb-1.5 ${isSelected ? 'text-[#2446D8] dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`} />
                         <span className="text-[11px] font-bold block">{cat.label}</span>
                       </button>
                     );
@@ -1147,7 +1222,7 @@ export const AddSubscriptionPage: React.FC = () => {
                 <h2 className="font-bold text-sm text-slate-900 dark:text-white">
                   Cadence & Pricing
                 </h2>
-                <span className="text-xs font-bold text-[#6B46C1] hover:underline cursor-pointer flex items-center gap-1">
+                <span className="text-xs font-bold text-[#6B46C1] dark:text-purple-400 hover:underline cursor-pointer flex items-center gap-1">
                   <HelpCircle className="w-3.5 h-3.5" />
                   <span>Auto-calculating FX</span>
                 </span>
@@ -1162,7 +1237,7 @@ export const AddSubscriptionPage: React.FC = () => {
                   <select
                     value={manualCurrency}
                     onChange={(e) => handleManualCurrencyChange(e.target.value as Currency)}
-                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#2446D8]"
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#2446D8]"
                   >
                     <option value="USD">USD ($)</option>
                     <option value="INR">INR (₹)</option>
@@ -1175,19 +1250,20 @@ export const AddSubscriptionPage: React.FC = () => {
                   <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1.5">
                     Recurring Amount *
                   </label>
-                  <div className="relative flex rounded-xl border border-slate-200 bg-white overflow-hidden">
-                    <span className="px-3.5 py-2.5 font-bold text-slate-500 text-xs bg-slate-50 border-r border-slate-200">
+                  <div className="relative flex rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-hidden">
+                    <span className="px-3.5 py-2.5 font-bold text-slate-500 dark:text-slate-300 text-xs bg-slate-50 dark:bg-slate-700/60 border-r border-slate-200 dark:border-slate-700">
                       {CURRENCY_SYMBOLS[manualCurrency] || '$'}
                     </span>
                     <input
                       type="number"
                       step="0.01"
                       required
+                      placeholder="0.00"
                       value={manualAmount}
                       onChange={(e) => setManualAmount(e.target.value)}
-                      className="w-full px-3 py-2.5 text-xs font-bold text-slate-900 focus:outline-none"
+                      className="w-full px-3 py-2.5 text-xs font-bold text-slate-900 dark:text-white bg-transparent focus:outline-none"
                     />
-                    <span className="px-3.5 py-2.5 text-[11px] font-semibold text-slate-400 bg-slate-50 border-l border-slate-200">
+                    <span className="px-3.5 py-2.5 text-[11px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-700/60 border-l border-slate-200 dark:border-slate-700">
                       {manualCurrency} / interval
                     </span>
                   </div>
@@ -1199,7 +1275,7 @@ export const AddSubscriptionPage: React.FC = () => {
                 <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-2">
                   Billing Cadence
                 </label>
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {[
                     { id: 'monthly', title: 'Monthly', badge: '✓', sub: 'Every 30 days' },
                     { id: 'annually', title: 'Annually', badge: '-18%', sub: 'Billed yearly' },
@@ -1213,18 +1289,18 @@ export const AddSubscriptionPage: React.FC = () => {
                       className={`p-3 rounded-2xl border text-center transition-all ${
                         manualCadence === cad.id
                           ? 'bg-[#2446D8] border-[#2446D8] text-white shadow-xs'
-                          : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
+                          : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600'
                       }`}
                     >
                       <div className="flex items-center justify-center gap-1 font-bold text-xs">
                         <span>{cad.title}</span>
                         {cad.badge && (
-                          <span className={`text-[10px] ${manualCadence === cad.id ? 'text-white' : 'text-emerald-600'}`}>
+                          <span className={`text-[10px] ${manualCadence === cad.id ? 'text-white' : 'text-emerald-600 dark:text-emerald-400 font-bold'}`}>
                             {cad.badge}
                           </span>
                         )}
                       </div>
-                      <span className={`text-[10px] block mt-0.5 ${manualCadence === cad.id ? 'text-blue-100' : 'text-slate-400'}`}>
+                      <span className={`text-[10px] block mt-0.5 ${manualCadence === cad.id ? 'text-blue-100' : 'text-slate-400 dark:text-slate-400'}`}>
                         {cad.sub}
                       </span>
                     </button>
@@ -1244,7 +1320,7 @@ export const AddSubscriptionPage: React.FC = () => {
                       required
                       value={manualNextDate}
                       onChange={(e) => setManualNextDate(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-900 focus:outline-none"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none dark:[color-scheme:dark]"
                     />
                   </div>
                 </div>
@@ -1261,9 +1337,9 @@ export const AddSubscriptionPage: React.FC = () => {
                         d.setDate(d.getDate() + 3);
                         setManualNextDate(d.toISOString().split('T')[0]);
                       }}
-                      className="px-2.5 py-2 rounded-xl bg-amber-50 text-amber-800 border border-amber-200 text-[11px] font-bold flex items-center gap-1"
+                      className="px-2.5 py-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 text-[11px] font-bold flex items-center gap-1"
                     >
-                      <Clock className="w-3 h-3 text-amber-600" />
+                      <Clock className="w-3 h-3 text-amber-600 dark:text-amber-400" />
                       <span>Renews in 3 days</span>
                     </button>
 
@@ -1274,7 +1350,7 @@ export const AddSubscriptionPage: React.FC = () => {
                         d.setDate(d.getDate() + 30);
                         setManualNextDate(d.toISOString().split('T')[0]);
                       }}
-                      className="px-2.5 py-2 rounded-xl bg-slate-100 text-slate-700 text-[11px] font-semibold hover:bg-slate-200"
+                      className="px-2.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 text-[11px] font-semibold hover:bg-slate-200 dark:hover:bg-slate-700"
                     >
                       +1 Month
                     </button>
@@ -1283,15 +1359,15 @@ export const AddSubscriptionPage: React.FC = () => {
               </div>
 
               {/* Free Trial Toggle Card */}
-              <div className="p-4 rounded-2xl bg-blue-50/70 border border-blue-100 space-y-3">
+              <div className="p-4 rounded-2xl bg-blue-50/70 dark:bg-slate-800/80 border border-blue-100 dark:border-slate-700 space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-start gap-2.5">
-                    <Hourglass className="w-4 h-4 text-blue-600 mt-0.5" />
+                    <Hourglass className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5" />
                     <div>
-                      <h4 className="font-bold text-xs text-slate-900">
+                      <h4 className="font-bold text-xs text-slate-900 dark:text-white">
                         Is this a free trial period?
                       </h4>
-                      <p className="text-[11px] text-slate-500 mt-0.5">
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                         Keep track of automatic debit dates to prevent unintended conversions.
                       </p>
                     </div>
@@ -1304,29 +1380,29 @@ export const AddSubscriptionPage: React.FC = () => {
                       onChange={(e) => setIsTrial(e.target.checked)}
                       className="sr-only peer"
                     />
-                    <div className="w-10 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#2446D8]" />
+                    <div className="w-10 h-5 bg-slate-300 dark:bg-slate-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#2446D8]" />
                   </label>
                 </div>
 
                 {isTrial && (
-                  <div className="grid grid-cols-2 gap-3 pt-2 border-t border-blue-100">
+                  <div className="grid grid-cols-2 gap-3 pt-2 border-t border-blue-100 dark:border-slate-700">
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
                         Trial End Date
                       </label>
                       <input
                         type="date"
                         value={trialEndDate}
                         onChange={(e) => setTrialEndDate(e.target.value)}
-                        className="w-full px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold"
+                        className="w-full px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-900 dark:text-white dark:[color-scheme:dark]"
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
                         Protection Notice
                       </label>
-                      <div className="px-2.5 py-1.5 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 text-[11px] font-bold flex items-center gap-1.5">
-                        <Bell className="w-3.5 h-3.5 text-amber-600" />
+                      <div className="px-2.5 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 text-[11px] font-bold flex items-center gap-1.5">
+                        <Bell className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
                         <span>Reminder 48h before auto-convert</span>
                       </div>
                     </div>
@@ -1347,14 +1423,14 @@ export const AddSubscriptionPage: React.FC = () => {
             <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs space-y-4">
               <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
                 <div className="flex items-center gap-2.5">
-                  <span className="w-6 h-6 rounded-lg bg-blue-50 text-[#2446D8] font-bold text-xs flex items-center justify-center">
+                  <span className="w-6 h-6 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-[#2446D8] dark:text-blue-400 font-bold text-xs flex items-center justify-center">
                     2
                   </span>
                   <h2 className="font-bold text-sm text-slate-900 dark:text-white">
                     Payment & Governance
                   </h2>
                 </div>
-                <span className="px-2.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200">
+                <span className="px-2.5 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold border border-emerald-200 dark:border-emerald-800">
                   PCI Compliant
                 </span>
               </div>
@@ -1417,19 +1493,19 @@ export const AddSubscriptionPage: React.FC = () => {
                         onClick={() => setManualPaymentInstrument(inst.id as any)}
                         className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between ${
                           isSelected
-                            ? 'bg-[#EEF2FF] border-[#2446D8]'
-                            : 'bg-white border-slate-200 hover:border-slate-300'
+                            ? 'bg-[#EEF2FF] dark:bg-blue-950/50 border-[#2446D8] dark:border-blue-500'
+                            : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
                         }`}
                       >
                         <div className="flex items-center gap-3">
-                          <div className={`p-2 rounded-xl ${isSelected ? 'bg-blue-100 text-[#2446D8]' : 'bg-slate-100 text-slate-600'}`}>
+                          <div className={`p-2 rounded-xl ${isSelected ? 'bg-blue-100 dark:bg-blue-900/60 text-[#2446D8] dark:text-blue-300' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}`}>
                             <Icon className="w-4 h-4" />
                           </div>
                           <div>
-                            <span className="font-bold text-xs text-slate-900 block">
+                            <span className="font-bold text-xs text-slate-900 dark:text-white block">
                               {inst.name}
                             </span>
-                            <span className="text-[11px] text-slate-400 block">
+                            <span className="text-[11px] text-slate-400 dark:text-slate-400 block">
                               {inst.num}
                             </span>
                           </div>
@@ -1438,12 +1514,12 @@ export const AddSubscriptionPage: React.FC = () => {
                         <div
                           className={`w-4 h-4 rounded-full border flex items-center justify-center ${
                             isSelected
-                              ? 'border-[#2446D8] bg-white'
-                              : 'border-slate-300'
+                              ? 'border-[#2446D8] dark:border-blue-500 bg-white dark:bg-slate-900'
+                              : 'border-slate-300 dark:border-slate-600'
                           }`}
                         >
                           {isSelected && (
-                            <div className="w-2.5 h-2.5 rounded-full bg-[#2446D8]" />
+                            <div className="w-2.5 h-2.5 rounded-full bg-[#2446D8] dark:bg-blue-500" />
                           )}
                         </div>
                       </div>
@@ -1452,8 +1528,8 @@ export const AddSubscriptionPage: React.FC = () => {
                 </div>
 
                 {railSuccessMsg && (
-                  <div className="mt-2.5 p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center gap-2 animate-in fade-in">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <div className="mt-2.5 p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs font-semibold flex items-center gap-2 animate-in fade-in">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                     <span>{railSuccessMsg}</span>
                   </div>
                 )}
@@ -1461,7 +1537,7 @@ export const AddSubscriptionPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setIsAddRailModalOpen(true)}
-                  className="w-full mt-2.5 py-2.5 rounded-xl border border-blue-200 text-[#2446D8] hover:bg-blue-50 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  className="w-full mt-2.5 py-2.5 rounded-xl border border-blue-200 dark:border-blue-900/60 text-[#2446D8] dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>Link New Payment Rail</span>
@@ -1480,8 +1556,8 @@ export const AddSubscriptionPage: React.FC = () => {
                   type="text"
                   value={manualMandateRef}
                   onChange={(e) => setManualMandateRef(e.target.value)}
-                  placeholder="UMN-99201-FGMA"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-[#F8FAFC] text-xs font-semibold text-slate-900 focus:outline-none"
+                  placeholder="e.g. UMN-99201-FGMA (Optional)"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-[#F8FAFC] dark:bg-slate-800 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none"
                 />
               </div>
 
@@ -1491,7 +1567,7 @@ export const AddSubscriptionPage: React.FC = () => {
                   Renewal Watchdog Triggers
                 </label>
                 <div className="space-y-1.5">
-                  <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-700">
+                  <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-700 dark:text-slate-300">
                     <input
                       type="checkbox"
                       checked={manualAlert7Days}
@@ -1500,7 +1576,7 @@ export const AddSubscriptionPage: React.FC = () => {
                     />
                     <span>Alert 7 days before renewal</span>
                   </label>
-                  <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-700">
+                  <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-700 dark:text-slate-300">
                     <input
                       type="checkbox"
                       checked={manualAlert2Days}
@@ -1509,7 +1585,7 @@ export const AddSubscriptionPage: React.FC = () => {
                     />
                     <span>Alert 2 days before renewal</span>
                   </label>
-                  <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-700">
+                  <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-700 dark:text-slate-300">
                     <input
                       type="checkbox"
                       checked={manualAlertConfirmation}
@@ -1532,12 +1608,12 @@ export const AddSubscriptionPage: React.FC = () => {
                     onClick={() => setManualTargetEmail(!manualTargetEmail)}
                     className={`px-3 py-1.5 rounded-xl text-xs font-semibold border flex items-center gap-1.5 ${
                       manualTargetEmail
-                        ? 'border-[#2446D8] text-[#2446D8] bg-blue-50'
-                        : 'border-slate-200 text-slate-600'
+                        ? 'border-[#2446D8] text-[#2446D8] dark:border-blue-500 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50'
+                        : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800'
                     }`}
                   >
                     <Mail className="w-3.5 h-3.5" />
-                    <span>hendry@company.com</span>
+                    <span>{user?.email || 'your-email@company.com'}</span>
                   </button>
 
                   <button
@@ -1545,8 +1621,8 @@ export const AddSubscriptionPage: React.FC = () => {
                     onClick={() => setManualTargetInApp(!manualTargetInApp)}
                     className={`px-3 py-1.5 rounded-xl text-xs font-semibold border flex items-center gap-1.5 ${
                       manualTargetInApp
-                        ? 'border-[#2446D8] text-[#2446D8] bg-blue-50'
-                        : 'border-slate-200 text-slate-600'
+                        ? 'border-[#2446D8] text-[#2446D8] dark:border-blue-500 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50'
+                        : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800'
                     }`}
                   >
                     <Bell className="w-3.5 h-3.5" />
@@ -1558,8 +1634,8 @@ export const AddSubscriptionPage: React.FC = () => {
                     onClick={() => setManualTargetSMS(!manualTargetSMS)}
                     className={`px-3 py-1.5 rounded-xl text-xs font-semibold border flex items-center gap-1.5 ${
                       manualTargetSMS
-                        ? 'border-[#2446D8] text-[#2446D8] bg-blue-50'
-                        : 'border-slate-200 text-slate-600'
+                        ? 'border-[#2446D8] text-[#2446D8] dark:border-blue-500 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50'
+                        : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800'
                     }`}
                   >
                     <MessageSquare className="w-3.5 h-3.5" />
@@ -1569,9 +1645,11 @@ export const AddSubscriptionPage: React.FC = () => {
               </div>
 
               {/* Contract & Cancellation Terms */}
-              <div className="p-3.5 rounded-2xl bg-[#F8FAFC] border border-slate-100 text-xs text-slate-600 leading-relaxed">
-                <span className="font-bold text-slate-800 block mb-0.5">Contract & Cancellation Terms</span>
-                Auto-renews into Professional Tier. Requires 30-day notice via admin console to revert seats.
+              <div className="p-3.5 rounded-2xl bg-[#F8FAFC] dark:bg-slate-800/80 border border-slate-100 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                <span className="font-bold text-slate-800 dark:text-white block mb-0.5">Contract & Cancellation Terms</span>
+                {manualMerchantName.trim()
+                  ? `Auto-renews periodically. RecurSight will track cancellation deadlines for ${manualMerchantName.trim()}.`
+                  : 'Auto-renews periodically. RecurSight will track cancellation deadlines and alerts before billing.'}
               </div>
 
             </div>
@@ -1585,30 +1663,34 @@ export const AddSubscriptionPage: React.FC = () => {
                     LEDGER FEED PREVIEW
                   </span>
                 </div>
-                <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold">
-                  ✓ Active (Confirmed)
+                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                  manualMerchantName.trim() && manualAmount.trim()
+                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                    : 'bg-slate-700/50 text-slate-400 border-slate-600'
+                }`}>
+                  {manualMerchantName.trim() && manualAmount.trim() ? '✓ Ready to Confirm' : 'Draft Preview'}
                 </span>
               </div>
 
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <MerchantLogo name={manualMerchantName} size="md" />
+                  <MerchantLogo name={manualMerchantName || 'Subscription'} size="md" />
                   <div>
                     <h3 className="font-black text-sm text-white">
-                      {manualMerchantName}
+                      {manualMerchantName.trim() || 'New Subscription'}
                     </h3>
                     <span className="text-[11px] text-slate-400 block mt-0.5">
-                      {manualCategory} Tools • Monthly
+                      {manualCategory} • {manualCadence.charAt(0).toUpperCase() + manualCadence.slice(1)}
                     </span>
                   </div>
                 </div>
 
                 <div className="text-right">
                   <span className="text-xl font-black text-white block">
-                    {CURRENCY_SYMBOLS[manualCurrency] || '$'}{manualAmount}
+                    {CURRENCY_SYMBOLS[manualCurrency] || '$'}{manualAmount ? parseFloat(manualAmount || '0').toFixed(2) : '0.00'}
                   </span>
                   <span className="text-[10px] text-slate-400 uppercase">
-                    / month
+                    / {manualCadence === 'annually' ? 'year' : 'month'}
                   </span>
                 </div>
               </div>
@@ -1616,11 +1698,19 @@ export const AddSubscriptionPage: React.FC = () => {
               <div className="pt-3 border-t border-white/10 flex items-center justify-between text-xs text-slate-400">
                 <div className="flex items-center gap-1.5">
                   <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                  <span>Next charge: {manualNextDate}</span>
+                  <span>Next charge: {manualNextDate || 'Not set'}</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <CreditCard className="w-3.5 h-3.5 text-slate-400" />
-                  <span>HDFC Visa (•••• 4092)</span>
+                  <span>
+                    {manualPaymentInstrument === 'upi_mandate'
+                      ? 'UPI AutoPay Mandate'
+                      : manualPaymentInstrument === 'hdfc_corp'
+                      ? (manualCurrency === 'INR' ? 'Salary Account •••• 4092' : 'Corporate Card •••• 4092')
+                      : manualPaymentInstrument === 'icici_master'
+                      ? 'Credit Card •••• 9811'
+                      : (customRails.find((r) => r.id === manualPaymentInstrument)?.name || 'Default Rail')}
+                  </span>
                 </div>
               </div>
             </div>
@@ -1630,7 +1720,7 @@ export const AddSubscriptionPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => navigate('/subscriptions')}
-                className="py-2.5 px-5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50"
+                className="py-2.5 px-5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
               >
                 Cancel
               </button>
@@ -1638,8 +1728,8 @@ export const AddSubscriptionPage: React.FC = () => {
               <button
                 type="button"
                 onClick={handleSaveManual}
-                disabled={isSaving}
-                className="py-2.5 px-6 rounded-xl bg-[#2446D8] hover:bg-blue-700 text-white text-xs font-bold shadow-md shadow-blue-600/20 flex items-center gap-2"
+                disabled={isSaving || !manualMerchantName.trim() || !manualAmount.trim()}
+                className="py-2.5 px-6 rounded-xl bg-[#2446D8] hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold shadow-md shadow-blue-600/20 flex items-center gap-2 cursor-pointer"
               >
                 {isSaving ? (
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -1678,6 +1768,7 @@ export const AddSubscriptionPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setIsAddRailModalOpen(false)}
+                aria-label="Close"
                 className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400"
               >
                 <X className="w-4 h-4" />
@@ -1689,7 +1780,7 @@ export const AddSubscriptionPage: React.FC = () => {
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
                   Payment Instrument Type
                 </label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {[
                     { id: 'upi', label: 'UPI AutoPay', icon: Smartphone },
                     { id: 'card', label: 'Debit/Credit', icon: CreditCard },
@@ -1701,7 +1792,7 @@ export const AddSubscriptionPage: React.FC = () => {
                       onClick={() => setNewRailType(t.id as any)}
                       className={`p-2.5 rounded-xl border text-center text-xs font-bold flex flex-col items-center gap-1.5 transition-all ${
                         newRailType === t.id
-                          ? 'border-[#2446D8] bg-blue-50/60 dark:bg-blue-950/60 text-[#2446D8]'
+                          ? 'border-[#2446D8] dark:border-blue-500 bg-blue-50/60 dark:bg-blue-950/60 text-[#2446D8] dark:text-blue-300'
                           : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
                       }`}
                     >

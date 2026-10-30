@@ -256,7 +256,7 @@ export const CancellationGuidance: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setActiveHubModal('Google Pay')}
-                className="py-1.5 px-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 flex items-center gap-1.5"
+                className="py-1.5 px-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-1.5"
               >
                 <Smartphone className="w-3.5 h-3.5 text-blue-500" />
                 <span>Google Pay</span>
@@ -265,7 +265,7 @@ export const CancellationGuidance: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setActiveHubModal('PhonePe')}
-                className="py-1.5 px-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 flex items-center gap-1.5"
+                className="py-1.5 px-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-1.5"
               >
                 <Smartphone className="w-3.5 h-3.5 text-purple-500" />
                 <span>PhonePe</span>
@@ -274,7 +274,7 @@ export const CancellationGuidance: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setActiveHubModal('Paytm')}
-                className="py-1.5 px-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 flex items-center gap-1.5"
+                className="py-1.5 px-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-1.5"
               >
                 <Smartphone className="w-3.5 h-3.5 text-sky-500" />
                 <span>Paytm</span>
@@ -283,9 +283,9 @@ export const CancellationGuidance: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setActiveHubModal('Bank NetBanking')}
-                className="py-1.5 px-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 flex items-center gap-1.5"
+                className="py-1.5 px-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-1.5"
               >
-                <Building2 className="w-3.5 h-3.5 text-slate-600" />
+                <Building2 className="w-3.5 h-3.5 text-slate-600 dark:text-slate-300" />
                 <span>Bank NetBanking</span>
               </button>
             </div>
@@ -420,7 +420,7 @@ export const CancellationGuidance: React.FC = () => {
             {subscriptions.map((sub) => (
               <div
                 key={sub.id}
-                className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col justify-between hover:border-slate-300 transition-all"
+                className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all"
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -447,18 +447,18 @@ export const CancellationGuidance: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => handleOpenCancel(sub)}
-                    className="flex-1 py-1.5 px-2.5 rounded-lg bg-[#8B1A1A] hover:bg-[#741515] text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-colors shadow-2xs"
+                    className="flex-1 py-1.5 px-2 rounded-lg bg-[#8B1A1A] hover:bg-[#741515] text-white text-[11px] sm:text-xs font-bold flex items-center justify-center gap-1.5 transition-colors shadow-2xs whitespace-nowrap"
                   >
-                    <ExternalLink className="w-3.5 h-3.5" />
+                    <ExternalLink className="w-3.5 h-3.5 shrink-0" />
                     <span>Cancel Vendor</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => handleOpenRevoke(sub)}
-                    className="flex-1 py-1.5 px-2.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
+                    className="flex-1 py-1.5 px-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-[11px] sm:text-xs font-bold flex items-center justify-center gap-1.5 transition-colors whitespace-nowrap"
                   >
-                    <Ban className="w-3.5 h-3.5 text-teal-600" />
+                    <Ban className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />
                     <span>Revoke AutoPay</span>
                   </button>
                 </div>
@@ -515,22 +515,22 @@ export const CancellationGuidance: React.FC = () => {
               }
 
               let badgeText = 'Confirmed at Bank';
-              let badgeStyle = 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900';
+              let badgeStyle = 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800';
               let BadgeIcon = CheckCircle2;
-              let iconColor = 'text-emerald-600';
+              let iconColor = 'text-emerald-600 dark:text-emerald-400';
 
               if (item.status === 'mandate_revocation_marked') {
                 badgeText = 'Mandate Inactive';
               } else if (isPause) {
                 badgeText = 'Paused';
-                badgeStyle = 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300 border-blue-200 dark:border-blue-900';
+                badgeStyle = 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border-blue-200 dark:border-blue-800';
                 BadgeIcon = Clock;
-                iconColor = 'text-blue-600';
+                iconColor = 'text-blue-600 dark:text-blue-400';
               } else if (item.status === 'guidance_viewed') {
                 badgeText = 'Guidance Opened';
                 badgeStyle = 'bg-slate-50 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700';
                 BadgeIcon = ExternalLink;
-                iconColor = 'text-slate-500';
+                iconColor = 'text-slate-500 dark:text-slate-400';
               }
 
               const initial = item.merchant_name?.charAt(0).toUpperCase() || 'S';
@@ -576,6 +576,7 @@ export const CancellationGuidance: React.FC = () => {
                   setActiveHubModal(null);
                   setSelectedSubForRevoke(null);
                 }}
+                aria-label="Close"
                 className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-white"
               >
                 <X className="w-4 h-4" />

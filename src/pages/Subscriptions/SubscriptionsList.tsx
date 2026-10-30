@@ -12,7 +12,6 @@ import {
   Download,
   MoreVertical,
   MoreHorizontal,
-  RotateCcw,
   CheckCircle,
   HelpCircle,
   LayoutGrid,
@@ -170,28 +169,20 @@ export const SubscriptionsList: React.FC = () => {
           </h1>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
           <button
             onClick={handleExportAudit}
-            className="py-2 px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 shadow-xs flex items-center gap-1.5 transition-all"
+            className="py-2 px-3 sm:px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 shadow-xs flex items-center gap-1.5 transition-all shrink-0"
           >
             <Download className="w-3.5 h-3.5 text-slate-500" />
             <span>Export Audit</span>
           </button>
 
-          <button
-            onClick={() => loadSubscriptions()}
-            className="py-2 px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 shadow-xs flex items-center gap-1.5 transition-all"
-          >
-            <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
-            <span>Refresh Bank Mandates</span>
-          </button>
-
           {/* Add Subscription Button */}
-          <div className="relative">
+          <div className="relative shrink-0">
             <button
               onClick={() => setShowAddMenu(!showAddMenu)}
-              className="py-2 px-4 rounded-xl bg-[#2446D8] hover:bg-blue-700 text-white text-xs font-bold shadow-sm shadow-blue-600/30 flex items-center gap-1.5 transition-all"
+              className="py-2 px-3.5 sm:px-4 rounded-xl bg-[#2446D8] hover:bg-blue-700 text-white text-xs font-bold shadow-sm shadow-blue-600/30 flex items-center gap-1.5 transition-all"
             >
               <Plus className="w-4 h-4" />
               <span>Add Subscription</span>
@@ -222,37 +213,37 @@ export const SubscriptionsList: React.FC = () => {
       </div>
 
       {/* 4 TOP STAT CARDS MATCHING SCREENSHOT */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {/* Card 1: Monthly Run-Rate */}
-        <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col justify-between">
+        <div className="p-3.5 sm:p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col justify-between">
           <div className="flex items-start justify-between">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
               MONTHLY RUN-RATE
             </span>
-            <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/60 flex items-center justify-center text-[#2446D8]">
-              <CreditCard className="w-4 h-4" />
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-blue-50 dark:bg-blue-950/60 flex items-center justify-center text-[#2446D8] shrink-0">
+              <CreditCard className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </div>
           </div>
           <div className="flex items-baseline gap-1 mt-3">
-            <span className="text-2xl font-black text-[#151B2D] dark:text-white">
+            <span className="text-xl sm:text-2xl font-black text-[#151B2D] dark:text-white truncate">
               {formatCurrency(monthlyRunRate, 'USD')}
             </span>
-            <span className="text-xs text-slate-400 font-normal">/mo</span>
+            <span className="text-xs text-slate-400 font-normal shrink-0">/mo</span>
           </div>
         </div>
 
         {/* Card 2: Active Subscriptions */}
-        <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col justify-between">
+        <div className="p-3.5 sm:p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col justify-between">
           <div className="flex items-start justify-between">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
               ACTIVE SUBSCRIPTIONS
             </span>
-            <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 flex items-center justify-center text-emerald-600">
-              <CheckCircle className="w-4 h-4" />
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 flex items-center justify-center text-emerald-600 shrink-0">
+              <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </div>
           </div>
           <div className="flex items-baseline gap-1.5 mt-3">
-            <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
+            <span className="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400">
               {String(activeSubs.length).padStart(2, '0')}
             </span>
             <span className="text-xs text-slate-400 font-normal">mandates</span>
@@ -260,17 +251,17 @@ export const SubscriptionsList: React.FC = () => {
         </div>
 
         {/* Card 3: Trials In Window */}
-        <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col justify-between">
+        <div className="p-3.5 sm:p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col justify-between">
           <div className="flex items-start justify-between">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
               TRIALS IN WINDOW
             </span>
-            <div className="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950/60 flex items-center justify-center text-amber-600">
-              <Clock className="w-4 h-4" />
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-amber-50 dark:bg-amber-950/60 flex items-center justify-center text-amber-600 shrink-0">
+              <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </div>
           </div>
           <div className="flex items-baseline gap-1.5 mt-3">
-            <span className="text-2xl font-black text-amber-600 dark:text-amber-400">
+            <span className="text-xl sm:text-2xl font-black text-amber-600 dark:text-amber-400">
               {String(trialSubs.length).padStart(2, '0')}
             </span>
             <span className="text-xs text-slate-400 font-normal">expiring</span>
@@ -278,17 +269,17 @@ export const SubscriptionsList: React.FC = () => {
         </div>
 
         {/* Card 4: Unconfirmed AutoPay */}
-        <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col justify-between">
+        <div className="p-3.5 sm:p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col justify-between">
           <div className="flex items-start justify-between">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
               UNCONFIRMED AUTOPAY
             </span>
-            <div className="w-8 h-8 rounded-lg bg-purple-50 dark:bg-purple-950/60 flex items-center justify-center text-purple-600">
-              <HelpCircle className="w-4 h-4" />
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-purple-50 dark:bg-purple-950/60 flex items-center justify-center text-purple-600 shrink-0">
+              <HelpCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </div>
           </div>
           <div className="flex items-baseline gap-1.5 mt-3">
-            <span className="text-2xl font-black text-purple-600 dark:text-purple-400">
+            <span className="text-xl sm:text-2xl font-black text-purple-600 dark:text-purple-400">
               {String(unconfirmedSubs.length).padStart(2, '0')}
             </span>
             <span className="text-xs text-slate-400 font-normal">/estimates</span>
@@ -301,12 +292,12 @@ export const SubscriptionsList: React.FC = () => {
       {/* ========================================================= */}
       <div className="space-y-3">
         {/* Row 1: Pill Status Tabs & View Switcher */}
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+        <div className="flex items-center justify-between gap-2.5">
+          <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar scrollbar-none pb-1 flex-1 min-w-0 pr-1">
             <button
               type="button"
               onClick={() => setStatusFilter('All')}
-              className={`py-1.5 px-3.5 rounded-full text-xs font-bold transition-all ${
+              className={`shrink-0 whitespace-nowrap py-1.5 px-3 sm:px-3.5 rounded-full text-xs font-bold transition-all ${
                 statusFilter === 'All'
                   ? 'bg-[#2446D8] text-white shadow-xs'
                   : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 border border-slate-200 dark:border-slate-700'
@@ -318,7 +309,7 @@ export const SubscriptionsList: React.FC = () => {
             <button
               type="button"
               onClick={() => setStatusFilter('active')}
-              className={`py-1.5 px-3.5 rounded-full text-xs font-semibold transition-all ${
+              className={`shrink-0 whitespace-nowrap py-1.5 px-3 sm:px-3.5 rounded-full text-xs font-semibold transition-all ${
                 statusFilter === 'active'
                   ? 'bg-[#2446D8] text-white shadow-xs'
                   : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 border border-slate-200 dark:border-slate-700'
@@ -330,7 +321,7 @@ export const SubscriptionsList: React.FC = () => {
             <button
               type="button"
               onClick={() => setStatusFilter('paused')}
-              className={`py-1.5 px-3.5 rounded-full text-xs font-semibold transition-all ${
+              className={`shrink-0 whitespace-nowrap py-1.5 px-3 sm:px-3.5 rounded-full text-xs font-semibold transition-all ${
                 statusFilter === 'paused'
                   ? 'bg-[#2446D8] text-white shadow-xs'
                   : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 border border-slate-200 dark:border-slate-700'
@@ -342,7 +333,7 @@ export const SubscriptionsList: React.FC = () => {
             <button
               type="button"
               onClick={() => setStatusFilter('trial')}
-              className={`py-1.5 px-3.5 rounded-full text-xs font-semibold transition-all ${
+              className={`shrink-0 whitespace-nowrap py-1.5 px-3 sm:px-3.5 rounded-full text-xs font-semibold transition-all ${
                 statusFilter === 'trial'
                   ? 'bg-[#2446D8] text-white shadow-xs'
                   : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 border border-slate-200 dark:border-slate-700'
@@ -356,8 +347,11 @@ export const SubscriptionsList: React.FC = () => {
           <div className="flex rounded-lg bg-slate-100 dark:bg-slate-800 p-0.5 border border-slate-200/80 dark:border-slate-700 shrink-0">
             <button
               onClick={() => setViewMode('table')}
+              aria-label="Table View"
               className={`p-1.5 rounded-md ${
-                viewMode === 'table' ? 'bg-[#EEF2FF] text-[#2446D8] shadow-xs' : 'text-slate-500'
+                viewMode === 'table'
+                  ? 'bg-[#EEF2FF] text-[#2446D8] dark:bg-blue-950/60 dark:text-blue-300 shadow-xs'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
               }`}
               title="Table View"
             >
@@ -365,8 +359,11 @@ export const SubscriptionsList: React.FC = () => {
             </button>
             <button
               onClick={() => setViewMode('grid')}
+              aria-label="Grid View"
               className={`p-1.5 rounded-md ${
-                viewMode === 'grid' ? 'bg-[#EEF2FF] text-[#2446D8] shadow-xs' : 'text-slate-500'
+                viewMode === 'grid'
+                  ? 'bg-[#EEF2FF] text-[#2446D8] dark:bg-blue-950/60 dark:text-blue-300 shadow-xs'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
               }`}
               title="Grid View"
             >
@@ -388,11 +385,11 @@ export const SubscriptionsList: React.FC = () => {
             />
           </div>
 
-          <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto">
+          <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto no-scrollbar scrollbar-none pb-1">
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
-              className="py-2 px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-300 focus:outline-none shadow-xs"
+              className="shrink-0 py-2 px-3 sm:px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-300 focus:outline-none shadow-xs"
             >
               <option value="All">Category : All</option>
               <option value="Entertainment">Entertainment</option>
@@ -405,7 +402,7 @@ export const SubscriptionsList: React.FC = () => {
             <select
               value={cycleFilter}
               onChange={(e) => setCycleFilter(e.target.value)}
-              className="py-2 px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-300 focus:outline-none shadow-xs"
+              className="shrink-0 py-2 px-3 sm:px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-300 focus:outline-none shadow-xs"
             >
               <option value="All">Cycle : All</option>
               <option value="month">Monthly</option>
@@ -413,7 +410,7 @@ export const SubscriptionsList: React.FC = () => {
             </select>
 
             <select
-              className="py-2 px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-300 focus:outline-none shadow-xs"
+              className="shrink-0 py-2 px-3 sm:px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-300 focus:outline-none shadow-xs"
             >
               <option value="All">Mode : All Accounts</option>
               <option value="HDFC">HDFC Visa •••• 4090</option>
@@ -430,17 +427,17 @@ export const SubscriptionsList: React.FC = () => {
       {viewMode === 'table' ? (
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+            <table className="w-full text-left border-collapse min-w-[760px]">
               <thead>
-                <tr className="bg-[#F1F4F9] dark:bg-slate-800/70 text-[11px] font-semibold text-[#64748B] dark:text-slate-400">
-                  <th className="py-3 pl-6">Service</th>
-                  <th className="py-3 px-4">Category</th>
-                  <th className="py-3 px-4">Amount</th>
-                  <th className="py-3 px-4">Cycle</th>
-                  <th className="py-3 px-4">Renewal Date</th>
-                  <th className="py-3 px-4">Payment Mode</th>
-                  <th className="py-3 px-4">Status</th>
-                  <th className="py-3 pr-6 text-right">Actions</th>
+                <tr className="bg-[#F1F4F9] dark:bg-slate-800/70 text-[11px] font-semibold text-[#64748B] dark:text-slate-300">
+                  <th className="py-3 pl-6 whitespace-nowrap">Service</th>
+                  <th className="py-3 px-4 whitespace-nowrap">Category</th>
+                  <th className="py-3 px-4 whitespace-nowrap">Amount</th>
+                  <th className="py-3 px-4 whitespace-nowrap">Cycle</th>
+                  <th className="py-3 px-4 whitespace-nowrap">Renewal Date</th>
+                  <th className="py-3 px-4 whitespace-nowrap">Payment Mode</th>
+                  <th className="py-3 px-4 whitespace-nowrap">Status</th>
+                  <th className="py-3 pr-6 text-right whitespace-nowrap">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
@@ -451,7 +448,7 @@ export const SubscriptionsList: React.FC = () => {
                       className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors group"
                     >
                       {/* Service name & Brand Logo */}
-                      <td className="py-4 pl-6">
+                      <td className="py-4 pl-6 whitespace-nowrap">
                         <div className="flex items-center gap-3">
                           <MerchantLogo name={sub.merchant_name} size="md" />
                           <span className="font-bold text-[#151B2D] dark:text-white text-[13px] block">
@@ -461,12 +458,12 @@ export const SubscriptionsList: React.FC = () => {
                       </td>
 
                       {/* Category */}
-                      <td className="py-4 px-4 text-slate-600 dark:text-slate-300 font-normal">
+                      <td className="py-4 px-4 text-slate-600 dark:text-slate-300 font-normal whitespace-nowrap">
                         {sub.category}
                       </td>
 
                       {/* Amount */}
-                      <td className="py-4 px-4">
+                      <td className="py-4 px-4 whitespace-nowrap">
                         <span className="font-bold text-[#151B2D] dark:text-white text-[13px]">
                           {formatCurrency(sub.amount, sub.currency)}
                         </span>
@@ -474,9 +471,9 @@ export const SubscriptionsList: React.FC = () => {
                       </td>
 
                       {/* Cycle */}
-                      <td className="py-4 px-4">
+                      <td className="py-4 px-4 whitespace-nowrap">
                         {sub.billing_interval_unit === 'years' ? (
-                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-[#E0E7FF] text-[#3730A3]">
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-[#E0E7FF] dark:bg-indigo-950/60 text-[#3730A3] dark:text-indigo-300">
                             Annual
                           </span>
                         ) : (
@@ -487,63 +484,64 @@ export const SubscriptionsList: React.FC = () => {
                       </td>
 
                       {/* Renewal Date */}
-                      <td className="py-4 px-4 font-medium text-slate-700 dark:text-slate-300">
+                      <td className="py-4 px-4 font-medium text-slate-700 dark:text-slate-300 whitespace-nowrap">
                         {sub.next_billing_date || 'N/A'}
                       </td>
 
                       {/* Payment Mode & AutoPay Sub-badge */}
-                      <td className="py-4 px-4">
-                        <div className="text-[#151B2D] dark:text-white font-medium text-xs">
+                      <td className="py-4 px-4 whitespace-nowrap">
+                        <div className="text-[#151B2D] dark:text-white font-medium text-xs whitespace-nowrap">
                           {sub.payment_mode_label || sub.payment_source?.display_name || 'HDFC Visa •••• 4090'}
                         </div>
                         <div className="mt-1">
                           {sub.payment_mode_badge?.includes('InActive') ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold bg-[#FEE2E2] text-[#991B1B]">
-                              <span className="w-1.5 h-1.5 rounded-full bg-red-600" />
-                              {sub.payment_mode_badge}
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold bg-[#FEE2E2] dark:bg-red-950/40 text-[#991B1B] dark:text-red-300 whitespace-nowrap">
+                              <span className="w-1.5 h-1.5 rounded-full bg-red-600 dark:bg-red-400 shrink-0" />
+                              <span>{sub.payment_mode_badge}</span>
                             </span>
                           ) : sub.payment_mode_badge?.includes('Annual') ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold bg-[#EEF2FF] text-[#2446D8]">
-                              <span className="w-1.5 h-1.5 rounded-full bg-[#2446D8]" />
-                              {sub.payment_mode_badge}
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold bg-[#EEF2FF] dark:bg-blue-950/50 text-[#2446D8] dark:text-blue-300 whitespace-nowrap">
+                              <span className="w-1.5 h-1.5 rounded-full bg-[#2446D8] dark:bg-blue-400 shrink-0" />
+                              <span>{sub.payment_mode_badge}</span>
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold bg-[#E8F7EE] text-[#126639]">
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
-                              {sub.payment_mode_badge || 'UPI AutoPay: Active'}
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold bg-[#E8F7EE] dark:bg-emerald-950/50 text-[#126639] dark:text-emerald-300 whitespace-nowrap">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 dark:bg-emerald-400 shrink-0" />
+                              <span>{sub.payment_mode_badge || 'UPI AutoPay: Active'}</span>
                             </span>
                           )}
                         </div>
                       </td>
 
                       {/* Status */}
-                      <td className="py-4 px-4">
+                      <td className="py-4 px-4 whitespace-nowrap">
                         {sub.status === 'active' && (
-                          <span className="inline-block px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-[#E8F7EE] text-[#126639]">
+                          <span className="inline-block px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-[#E8F7EE] dark:bg-emerald-950/50 text-[#126639] dark:text-emerald-300">
                             Active
                           </span>
                         )}
                         {sub.status === 'trial' && (
-                          <span className="inline-block px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-[#FEF3C7] text-[#92400E]">
+                          <span className="inline-block px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-[#FEF3C7] dark:bg-amber-950/50 text-[#92400E] dark:text-amber-300">
                             Free Trial
                           </span>
                         )}
                         {sub.status === 'paused' && (
-                          <span className="inline-block px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-[#FEE2E2] text-[#991B1B]">
+                          <span className="inline-block px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-[#FEE2E2] dark:bg-red-950/40 text-[#991B1B] dark:text-red-300">
                             Inactive
                           </span>
                         )}
                         {sub.status === 'needs_review' && (
-                          <span className="inline-block px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-[#F1EDFB] text-[#5B3FB0]">
+                          <span className="inline-block px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-[#F1EDFB] dark:bg-purple-950/50 text-[#5B3FB0] dark:text-purple-300">
                             Needs Review
                           </span>
                         )}
                       </td>
 
                       {/* Actions */}
-                      <td className="py-4 pr-6 text-right relative">
+                      <td className="py-4 pr-6 text-right relative whitespace-nowrap">
                         <button
                           onClick={() => setActionMenuOpenId(actionMenuOpenId === sub.id ? null : sub.id)}
+                          aria-label={`Actions for ${sub.merchant_name}`}
                           className="p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
                         >
                           <MoreHorizontal className="w-4 h-4" />
@@ -608,7 +606,7 @@ export const SubscriptionsList: React.FC = () => {
           </div>
 
           {/* Table Pagination Footer matching Screenshot */}
-          <div className="p-4 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
+          <div className="p-4 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400">
             <span>Showing {startItem}-{endItem} of {totalItems} tracked recurring commitments</span>
             <div className="flex items-center gap-1.5">
               <button
@@ -618,7 +616,7 @@ export const SubscriptionsList: React.FC = () => {
                 className={`py-1 px-3 rounded-md border text-xs font-medium transition-colors ${
                   currentPage <= 1
                     ? 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800 text-slate-300 dark:text-slate-600 cursor-not-allowed'
-                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 cursor-pointer'
+                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer'
                 }`}
               >
                 Previous
@@ -634,7 +632,7 @@ export const SubscriptionsList: React.FC = () => {
                     className={`w-7 h-7 rounded-md text-xs font-bold flex items-center justify-center transition-all cursor-pointer ${
                       isActive
                         ? 'bg-[#2446D8] text-white shadow-xs'
-                        : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50'
+                        : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
                     }`}
                   >
                     {pageNum}
@@ -649,7 +647,7 @@ export const SubscriptionsList: React.FC = () => {
                 className={`py-1 px-3 rounded-md border text-xs font-medium transition-colors ${
                   currentPage >= totalPages
                     ? 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800 text-slate-300 dark:text-slate-600 cursor-not-allowed'
-                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 cursor-pointer'
+                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer'
                 }`}
               >
                 Next
@@ -674,7 +672,7 @@ export const SubscriptionsList: React.FC = () => {
                         <h3 className="font-bold text-slate-900 dark:text-white text-sm">
                           {sub.merchant_name}
                         </h3>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300">
                           {sub.category}
                         </span>
                       </div>
@@ -685,11 +683,11 @@ export const SubscriptionsList: React.FC = () => {
                   </div>
 
                   <div className="mt-4 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 text-xs space-y-1.5">
-                    <div className="flex justify-between text-slate-500">
+                    <div className="flex justify-between text-slate-500 dark:text-slate-400">
                       <span>Renewal:</span>
                       <span className="font-semibold text-slate-900 dark:text-white">{sub.next_billing_date || 'N/A'}</span>
                     </div>
-                    <div className="flex justify-between text-slate-500">
+                    <div className="flex justify-between text-slate-500 dark:text-slate-400">
                       <span>Instrument:</span>
                       <span className="font-semibold text-slate-900 dark:text-white">{sub.payment_source?.display_name || 'Card ••4821'}</span>
                     </div>
@@ -699,7 +697,7 @@ export const SubscriptionsList: React.FC = () => {
                 <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
                   <button
                     onClick={() => setSelectedSubForDetails(sub)}
-                    className="text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-[#2446D8]"
+                    className="text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-[#2446D8] dark:hover:text-blue-400"
                   >
                     View Details
                   </button>
@@ -716,7 +714,7 @@ export const SubscriptionsList: React.FC = () => {
           </div>
 
           {/* Grid View Pagination Footer */}
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400">
             <div>
               Showing <span className="font-bold text-slate-900 dark:text-white">{startItem}-{endItem}</span> of{' '}
               <span className="font-bold text-slate-900 dark:text-white">{filteredSubscriptions.length}</span> tracked recurring commitments
@@ -730,7 +728,7 @@ export const SubscriptionsList: React.FC = () => {
                 className={`py-1 px-3 rounded-md border text-xs font-medium transition-colors ${
                   currentPage <= 1
                     ? 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800 text-slate-300 dark:text-slate-600 cursor-not-allowed'
-                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 cursor-pointer'
+                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer'
                 }`}
               >
                 Previous
@@ -746,7 +744,7 @@ export const SubscriptionsList: React.FC = () => {
                     className={`w-7 h-7 rounded-md text-xs font-bold flex items-center justify-center transition-all cursor-pointer ${
                       isActive
                         ? 'bg-[#2446D8] text-white shadow-xs'
-                        : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50'
+                        : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
                     }`}
                   >
                     {pageNum}
@@ -761,7 +759,7 @@ export const SubscriptionsList: React.FC = () => {
                 className={`py-1 px-3 rounded-md border text-xs font-medium transition-colors ${
                   currentPage >= totalPages
                     ? 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800 text-slate-300 dark:text-slate-600 cursor-not-allowed'
-                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 cursor-pointer'
+                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer'
                 }`}
               >
                 Next
@@ -789,6 +787,7 @@ export const SubscriptionsList: React.FC = () => {
               </div>
               <button
                 onClick={() => setSelectedSubForDetails(null)}
+                aria-label="Close"
                 className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-white"
               >
                 <X className="w-5 h-5" />

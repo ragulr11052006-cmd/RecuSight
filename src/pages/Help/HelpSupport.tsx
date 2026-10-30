@@ -85,7 +85,7 @@ export const HelpSupport: React.FC<HelpSupportProps> = ({ isPublic = false }) =>
           </div>
           <div>
             <span className="text-[10px] font-bold uppercase text-slate-400">Email IT Desk</span>
-            <a href="mailto:support@recusight.com" className="text-xs font-bold text-slate-800 dark:text-slate-200 block hover:text-[#2446D8]">
+            <a href="mailto:support@recusight.com" className="text-xs font-bold text-slate-800 dark:text-slate-200 block hover:text-[#2446D8] dark:hover:text-blue-400">
               support@recusight.com
             </a>
           </div>
@@ -146,6 +146,7 @@ export const HelpSupport: React.FC<HelpSupportProps> = ({ isPublic = false }) =>
               <button
                 type="button"
                 onClick={() => setOpenFaq(openFaq === idx ? null : idx)}
+                aria-expanded={openFaq === idx}
                 className="w-full p-4 text-left flex items-center justify-between text-xs font-bold text-slate-900 dark:text-white hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
               >
                 <span>{faq.q}</span>

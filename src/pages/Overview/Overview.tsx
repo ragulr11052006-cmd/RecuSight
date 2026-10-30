@@ -10,6 +10,7 @@ import {
   AlertTriangle,
   Clock,
   TrendingUp,
+  TrendingDown,
   Plus,
   ArrowRight,
   ExternalLink,
@@ -125,6 +126,8 @@ export const Overview: React.FC = () => {
 
   const displayCategories = categoryEntries;
 
+  const isDarkMode = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+
   const pieData =
     displayCategories.length > 0
       ? displayCategories.map((c) => ({
@@ -132,7 +135,7 @@ export const Overview: React.FC = () => {
           value: c.pct || 1,
           color: c.color,
         }))
-      : [{ name: 'No Spend', value: 1, color: '#E2E8F0' }];
+      : [{ name: 'No Spend', value: 1, color: isDarkMode ? '#334155' : '#E2E8F0' }];
 
   // Upcoming renewals calculation
   const now = new Date();
@@ -152,6 +155,52 @@ export const Overview: React.FC = () => {
     return diffDays >= 0 && diffDays <= 3;
   }).length;
   const trialExpiringCount = trialsEndingSoon;
+
+  // 3. Period-over-period spend trend calculation
+  const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const priorPeriodActiveSubs = activeSubs.filter((s) => {
+    if (!s.created_at) return true;
+    return new Date(s.created_at) < startOfCurrentMonth;
+  });
+  const priorPeriodMonthlySpend = priorPeriodActiveSubs.reduce(
+    (acc, curr) => acc + calculateMonthlyAmount(curr),
+    0
+  );
+
+  let spendTrendBadge: { label: string; type: 'positive' | 'negative' | 'neutral' | 'empty' } = {
+    label: 'No prior period data',
+    type: 'empty',
+  };
+
+  if (activeSubs.length === 0 || monthlyRunRate === 0) {
+    spendTrendBadge = {
+      label: 'No prior period data',
+      type: 'empty',
+    };
+  } else if (priorPeriodMonthlySpend === 0) {
+    spendTrendBadge = {
+      label: 'Baseline period',
+      type: 'neutral',
+    };
+  } else {
+    const diffPct = ((monthlyRunRate - priorPeriodMonthlySpend) / priorPeriodMonthlySpend) * 100;
+    if (diffPct > 0) {
+      spendTrendBadge = {
+        label: `+${diffPct.toFixed(1)}% vs last period`,
+        type: 'positive',
+      };
+    } else if (diffPct < 0) {
+      spendTrendBadge = {
+        label: `${diffPct.toFixed(1)}% vs last period`,
+        type: 'negative',
+      };
+    } else {
+      spendTrendBadge = {
+        label: '0.0% vs last period',
+        type: 'neutral',
+      };
+    }
+  }
 
   // 3. Upcoming renewals
   const allUpcoming = subscriptions
@@ -269,7 +318,7 @@ export const Overview: React.FC = () => {
 
           <div className="mt-3">
             <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-              newSubsBadgeCount > 0 ? 'bg-[#E8F7EE] text-[#126639]' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
+              newSubsBadgeCount > 0 ? 'bg-[#E8F7EE] dark:bg-emerald-950/60 text-[#126639] dark:text-emerald-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
             }`}>
               <TrendingUp className="w-3 h-3" />
               {newSubsBadgeCount > 0 ? `+${newSubsBadgeCount} new this month` : '0 new this month'}
@@ -325,7 +374,7 @@ export const Overview: React.FC = () => {
 
           <div className="mt-3">
             <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-              trialExpiringCount > 0 ? 'bg-[#FEF3C7] text-[#92400E]' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
+              trialExpiringCount > 0 ? 'bg-[#FEF3C7] dark:bg-amber-950/60 text-[#92400E] dark:text-amber-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
             }`}>
               <Clock className="w-3 h-3" />
               {trialExpiringCount} Ending in &lt;72h
@@ -380,9 +429,20 @@ export const Overview: React.FC = () => {
           </div>
 
           <div className="mt-3">
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#FEE2E2] text-[#991B1B]">
-              <AlertCircle className="w-3 h-3" />
-              {attentionSubs.length} Actions required
+            <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+              attentionSubs.length > 0 ? 'bg-[#FEE2E2] dark:bg-rose-950/60 text-[#991B1B] dark:text-rose-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+            }`}>
+              {attentionSubs.length > 0 ? (
+                <>
+                  <AlertCircle className="w-3 h-3" />
+                  <span>{attentionSubs.length} Actions required</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="w-3 h-3 text-emerald-500" />
+                  <span>0 Actions required</span>
+                </>
+              )}
             </span>
           </div>
         </div>
@@ -437,7 +497,9 @@ export const Overview: React.FC = () => {
           </div>
 
           <div className="mt-3">
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#E0F2FE] text-[#0369A1]">
+            <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+              weeklyUpcoming.length > 0 ? 'bg-[#E0F2FE] dark:bg-sky-950/60 text-[#0369A1] dark:text-sky-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+            }`}>
               Due in 7 days ({weeklyUpcoming.length})
             </span>
           </div>
@@ -463,10 +525,25 @@ export const Overview: React.FC = () => {
                 </p>
               </div>
 
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#E8F7EE] text-[#126639] shrink-0">
-                <TrendingUp className="w-3 h-3" />
-                +4.2% vs last period
-              </span>
+              {spendTrendBadge.type === 'empty' ? (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 shrink-0">
+                  {spendTrendBadge.label}
+                </span>
+              ) : spendTrendBadge.type === 'positive' ? (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#E8F7EE] dark:bg-emerald-950/60 text-[#126639] dark:text-emerald-300 shrink-0">
+                  <TrendingUp className="w-3 h-3" />
+                  {spendTrendBadge.label}
+                </span>
+              ) : spendTrendBadge.type === 'negative' ? (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#FEF2F2] dark:bg-rose-950/60 text-[#991B1B] dark:text-rose-300 shrink-0">
+                  <TrendingDown className="w-3 h-3" />
+                  {spendTrendBadge.label}
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 shrink-0">
+                  {spendTrendBadge.label}
+                </span>
+              )}
             </div>
 
             {/* Run Rate & Filter Toggles */}
@@ -488,7 +565,7 @@ export const Overview: React.FC = () => {
                     className={`py-1 px-3 rounded-lg text-xs font-bold transition-all ${
                       spendInterval === 'monthly'
                         ? 'bg-[#2446D8] text-white shadow-xs'
-                        : 'text-slate-500 hover:text-slate-800'
+                        : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white'
                     }`}
                   >
                     Monthly
@@ -499,7 +576,7 @@ export const Overview: React.FC = () => {
                     className={`py-1 px-3 rounded-lg text-xs font-bold transition-all ${
                       spendInterval === 'yearly'
                         ? 'bg-[#2446D8] text-white shadow-xs'
-                        : 'text-slate-500 hover:text-slate-800'
+                        : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white'
                     }`}
                   >
                     Yearly
@@ -576,10 +653,12 @@ export const Overview: React.FC = () => {
                   </div>
                 )}
 
-                <div className="pt-2 flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400 font-semibold">
-                  <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                  <span>Optimal allocation band</span>
-                </div>
+                {displayCategories.length > 0 && (
+                  <div className="pt-2 flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400 font-semibold">
+                    <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                    <span>Optimal allocation band</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -618,7 +697,7 @@ export const Overview: React.FC = () => {
                   "Review these trials before they end."
                 </p>
               </div>
-              <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-md bg-[#FEF3C7] text-[#92400E]">
+              <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-md bg-[#FEF3C7] dark:bg-amber-950/60 text-[#92400E] dark:text-amber-300">
                 Action Required
               </span>
             </div>
@@ -639,8 +718,8 @@ export const Overview: React.FC = () => {
                             <h4 className="text-sm font-bold text-[#151B2D] dark:text-white">
                               {trial.merchant_name}
                             </h4>
-                            <span className="text-[11px] font-bold text-red-600 flex items-center gap-1">
-                              <ShieldAlert className="w-3 h-3 text-red-600" />
+                            <span className="text-[11px] font-bold text-red-600 dark:text-red-400 flex items-center gap-1">
+                              <ShieldAlert className="w-3 h-3 text-red-600 dark:text-red-400" />
                               Ends in {endsInDays} {endsInDays === 1 ? 'Day' : 'Days'} ({trial.next_billing_date || 'Oct 31'})
                             </span>
                           </div>
@@ -666,7 +745,7 @@ export const Overview: React.FC = () => {
                       </button>
                       <NavLink
                         to={`/cancellation-guidance?service=${encodeURIComponent(trial.merchant_name)}`}
-                        className="py-2 px-3 rounded-xl bg-[#FEE2E2] hover:bg-red-100 text-[#991B1B] text-xs font-bold flex items-center justify-center gap-1 transition-colors"
+                        className="py-2 px-3 rounded-xl bg-[#FEE2E2] hover:bg-red-100 dark:bg-red-950/50 dark:hover:bg-red-900/50 text-[#991B1B] dark:text-red-300 text-xs font-bold flex items-center justify-center gap-1 transition-colors"
                       >
                         <span>Cancel Guidance</span>
                         <ExternalLink className="w-3 h-3" />
@@ -716,33 +795,33 @@ export const Overview: React.FC = () => {
           </div>
 
           {/* Filter Pills */}
-          <div className="flex items-center gap-1.5 mb-4">
+          <div className="flex items-center gap-1.5 mb-4 overflow-x-auto no-scrollbar scrollbar-none pb-1">
             <button
               onClick={() => setRenewalFilter('all')}
-              className={`py-1 px-3 rounded-full text-xs font-bold transition-all ${
+              className={`shrink-0 whitespace-nowrap py-1 px-3 rounded-full text-xs font-bold transition-all ${
                 renewalFilter === 'all'
                   ? 'bg-[#2446D8] text-white shadow-xs'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
               }`}
             >
               All ({allUpcoming.length})
             </button>
             <button
               onClick={() => setRenewalFilter('week')}
-              className={`py-1 px-3 rounded-full text-xs font-semibold transition-all ${
+              className={`shrink-0 whitespace-nowrap py-1 px-3 rounded-full text-xs font-semibold transition-all ${
                 renewalFilter === 'week'
                   ? 'bg-[#2446D8] text-white shadow-xs'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
               }`}
             >
               Weekly ({weeklyUpcoming.length})
             </button>
             <button
               onClick={() => setRenewalFilter('month')}
-              className={`py-1 px-3 rounded-full text-xs font-semibold transition-all ${
+              className={`shrink-0 whitespace-nowrap py-1 px-3 rounded-full text-xs font-semibold transition-all ${
                 renewalFilter === 'month'
                   ? 'bg-[#2446D8] text-white shadow-xs'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
               }`}
             >
               Monthly ({monthlyUpcoming.length})
@@ -761,7 +840,7 @@ export const Overview: React.FC = () => {
                 return (
                   <div
                     key={sub.id}
-                    className="p-3.5 rounded-xl hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors flex items-center justify-between border border-transparent hover:border-slate-100"
+                    className="p-3.5 rounded-xl hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors flex items-center justify-between border border-transparent hover:border-slate-100 dark:hover:border-slate-800"
                   >
                     <div className="flex items-center gap-3">
                       <MerchantLogo name={sub.merchant_name} size="sm" />
@@ -771,6 +850,9 @@ export const Overview: React.FC = () => {
                         </h4>
                         <span className="text-[10px] text-slate-400">
                           {sub.category} • <span className="font-semibold text-slate-600 dark:text-slate-300">{paymentSource}</span>
+                        </span>
+                        <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 block sm:hidden mt-0.5">
+                          in {diffDays} {diffDays === 1 ? 'day' : 'days'} ({sub.next_billing_date || 'Nov 02'})
                         </span>
                       </div>
                     </div>
@@ -783,10 +865,10 @@ export const Overview: React.FC = () => {
                         <span
                           className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${
                             isUrgent
-                              ? 'text-red-600 bg-red-50'
+                              ? 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40'
                               : isWarning
-                              ? 'text-amber-600 bg-amber-50'
-                              : 'text-emerald-600 bg-emerald-50'
+                              ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40'
+                              : 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40'
                           }`}
                         >
                           in {diffDays} {diffDays === 1 ? 'day' : 'days'}
@@ -800,7 +882,7 @@ export const Overview: React.FC = () => {
                         <span className="text-[10px] text-slate-400">/ month</span>
                       </div>
 
-                      <ChevronRight className="w-4 h-4 text-slate-300" />
+                      <ChevronRight className="w-4 h-4 text-slate-300 dark:text-slate-600" />
                     </div>
                   </div>
                 );
@@ -827,7 +909,7 @@ export const Overview: React.FC = () => {
                   Newly detected or activated subscriptions
                 </p>
               </div>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-[#E8F7EE] text-[#126639]">
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-[#E8F7EE] dark:bg-emerald-950/60 text-[#126639] dark:text-emerald-300">
                 {String(Math.min(activeSubs.length, 4)).padStart(2, '0')}
               </span>
             </div>
@@ -846,7 +928,7 @@ export const Overview: React.FC = () => {
                           <h4 className="text-xs font-bold text-[#151B2D] dark:text-white">
                             {sub.merchant_name}
                           </h4>
-                          <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-[#E8F7EE] text-[#126639]">
+                          <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-[#E8F7EE] dark:bg-emerald-950/60 text-[#126639] dark:text-emerald-300">
                             {sub.status}
                           </span>
                         </div>

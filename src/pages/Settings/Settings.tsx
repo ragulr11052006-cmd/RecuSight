@@ -271,7 +271,7 @@ export const Settings: React.FC = () => {
                 type="email"
                 disabled
                 value={user?.email || 'hendry.sujon@example.com'}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 text-slate-500 cursor-not-allowed"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 cursor-not-allowed"
               />
             </div>
 
@@ -327,7 +327,7 @@ export const Settings: React.FC = () => {
             <label className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 cursor-pointer">
               <div>
                 <span className="font-bold text-slate-900 dark:text-white block">Email Notifications</span>
-                <span className="text-slate-500">Receive advance warnings via email before renewal</span>
+                <span className="text-slate-500 dark:text-slate-400">Receive advance warnings via email before renewal</span>
               </div>
               <input
                 type="checkbox"
@@ -340,7 +340,7 @@ export const Settings: React.FC = () => {
             <label className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 cursor-pointer">
               <div>
                 <span className="font-bold text-slate-900 dark:text-white block">In-App Command Bar Alerts</span>
-                <span className="text-slate-500">Display notifications inside dashboard header</span>
+                <span className="text-slate-500 dark:text-slate-400">Display notifications inside dashboard header</span>
               </div>
               <input
                 type="checkbox"
@@ -358,7 +358,7 @@ export const Settings: React.FC = () => {
                 <select
                   value={prefs.default_lead_days}
                   onChange={(e) => setPrefs({ ...prefs, default_lead_days: Number(e.target.value) })}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-semibold"
                 >
                   <option value={1}>1 day before (24h SLA)</option>
                   <option value={2}>2 days before (48h Standard SLA)</option>
@@ -375,7 +375,7 @@ export const Settings: React.FC = () => {
                   type="time"
                   value={prefs.reminder_dispatch_time}
                   onChange={(e) => setPrefs({ ...prefs, reminder_dispatch_time: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-semibold"
                 />
               </div>
             </div>
@@ -394,39 +394,39 @@ export const Settings: React.FC = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
             <button
               type="button"
               onClick={() => setTheme('light')}
-              className={`p-3.5 rounded-2xl border text-center font-bold flex flex-col items-center gap-2 transition-all ${
+              className={`p-3 sm:p-3.5 rounded-2xl border text-center font-bold flex flex-row sm:flex-col items-center justify-center gap-2 transition-all ${
                 theme === 'light'
-                  ? 'bg-blue-50/50 dark:bg-slate-800 border-[#2446D8] text-[#2446D8] shadow-sm'
+                  ? 'bg-blue-50/50 dark:bg-blue-950/40 border-[#2446D8] dark:border-blue-500 text-[#2446D8] dark:text-blue-400 shadow-sm'
                   : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'
               }`}
             >
-              <Sun className="w-4 h-4" />
+              <Sun className="w-4 h-4 shrink-0" />
               <span>Light Mode</span>
             </button>
 
             <button
               type="button"
               onClick={() => setTheme('dark')}
-              className={`p-3.5 rounded-2xl border text-center font-bold flex flex-col items-center gap-2 transition-all ${
+              className={`p-3 sm:p-3.5 rounded-2xl border text-center font-bold flex flex-row sm:flex-col items-center justify-center gap-2 transition-all ${
                 theme === 'dark'
-                  ? 'bg-blue-50/50 dark:bg-slate-800 border-[#2446D8] text-[#2446D8] shadow-sm'
+                  ? 'bg-blue-50/50 dark:bg-blue-950/40 border-[#2446D8] dark:border-blue-500 text-[#2446D8] dark:text-blue-400 shadow-sm'
                   : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'
               }`}
             >
-              <Moon className="w-4 h-4" />
+              <Moon className="w-4 h-4 shrink-0" />
               <span>Dark Mode</span>
             </button>
 
             <button
               type="button"
               onClick={() => toggleTheme()}
-              className="p-3.5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-center font-bold flex flex-col items-center gap-2"
+              className="p-3 sm:p-3.5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-center font-bold flex flex-row sm:flex-col items-center justify-center gap-2"
             >
-              <Globe className="w-4 h-4" />
+              <Globe className="w-4 h-4 shrink-0" />
               <span>Quick Toggle</span>
             </button>
           </div>
@@ -457,7 +457,7 @@ export const Settings: React.FC = () => {
             <button
               type="button"
               onClick={handleResetData}
-              className="py-3 px-4 rounded-2xl border border-red-200 dark:border-red-900/50 hover:bg-red-50 dark:hover:bg-red-950/20 text-red-600 font-bold flex items-center justify-center gap-2 transition-colors"
+              className="py-3 px-4 rounded-2xl border border-red-200 dark:border-red-900/50 hover:bg-red-50 dark:hover:bg-red-950/20 text-red-600 dark:text-red-400 font-bold flex items-center justify-center gap-2 transition-colors"
             >
               <Trash2 className="w-4 h-4" />
               <span>Reset Mock Database</span>
@@ -470,7 +470,7 @@ export const Settings: React.FC = () => {
           <button
             type="button"
             onClick={() => signOut()}
-            className="text-xs font-bold text-red-600 hover:underline px-2 py-1"
+            className="text-xs font-bold text-red-600 dark:text-red-400 hover:underline px-2 py-1"
           >
             Sign Out of Account
           </button>
@@ -499,13 +499,14 @@ export const Settings: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowAvatarModal(false)}
+                aria-label="Close"
                 className="text-slate-400 hover:text-slate-600 dark:hover:text-white p-1 rounded-lg"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-slate-500 dark:text-slate-400">
               Select one of our curated high-resolution avatars to personalize your RecurSight profile:
             </p>
 

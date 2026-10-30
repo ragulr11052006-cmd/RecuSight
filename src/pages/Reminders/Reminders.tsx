@@ -205,14 +205,14 @@ export const Reminders: React.FC = () => {
       {/* ========================================================= */}
       {/* FILTER TABS                                               */}
       {/* ========================================================= */}
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex items-center gap-2 overflow-x-auto no-scrollbar scrollbar-none pb-1">
         <button
           type="button"
           onClick={() => setActiveTab('all')}
-          className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
+          className={`shrink-0 whitespace-nowrap px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
             activeTab === 'all'
               ? 'bg-[#2446D8] text-white shadow-xs'
-              : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50'
+              : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
           }`}
         >
           All Reminders <span className="ml-1 opacity-90">{allScheduledCount}</span>
@@ -221,39 +221,39 @@ export const Reminders: React.FC = () => {
         <button
           type="button"
           onClick={() => setActiveTab('scheduled')}
-          className={`px-4 py-1.5 rounded-full text-xs font-semibold flex items-center gap-2 transition-all ${
+          className={`shrink-0 whitespace-nowrap px-4 py-1.5 rounded-full text-xs font-semibold flex items-center gap-2 transition-all ${
             activeTab === 'scheduled'
               ? 'bg-[#2446D8] text-white font-bold shadow-xs'
-              : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50'
+              : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
           }`}
         >
-          <span className="w-2 h-2 rounded-full bg-[#2446D8]" />
+          <span className="w-2 h-2 rounded-full bg-[#2446D8] shrink-0" />
           <span>Scheduled {allScheduledCount}</span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab('failed')}
-          className={`px-4 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all ${
+          className={`shrink-0 whitespace-nowrap px-4 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all ${
             activeTab === 'failed'
               ? 'bg-red-600 text-white font-bold shadow-xs'
-              : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20'
+              : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20'
           }`}
         >
-          <span className="w-4 h-4 rounded-full bg-red-100 text-red-700 flex items-center justify-center text-[10px] font-black">!</span>
+          <span className="w-4 h-4 rounded-full bg-red-100 text-red-700 flex items-center justify-center text-[10px] font-black shrink-0">!</span>
           <span>Failed / Blocked {reminders.filter(r => r.status === 'failed').length}</span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab('cannot_schedule')}
-          className={`px-4 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all ${
+          className={`shrink-0 whitespace-nowrap px-4 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all ${
             activeTab === 'cannot_schedule'
               ? 'bg-[#6B46C1] text-white font-bold shadow-xs'
-              : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-purple-700 hover:bg-purple-50 dark:hover:bg-purple-950/20'
+              : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-950/30'
           }`}
         >
-          <span className="w-4 h-4 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center text-[10px] font-black">?</span>
+          <span className="w-4 h-4 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center text-[10px] font-black shrink-0">?</span>
           <span>Cannot Schedule {unconfirmedSubs.length}</span>
         </button>
       </div>
@@ -324,7 +324,7 @@ export const Reminders: React.FC = () => {
                         </span>
                       </div>
 
-                      <div className="p-4 rounded-2xl bg-[#F8FAFC] dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 flex items-center justify-between hover:border-slate-200 dark:hover:border-slate-700 transition-all">
+                      <div className="p-4 rounded-2xl bg-[#F8FAFC] dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-slate-200 dark:hover:border-slate-700 transition-all">
                         <div className="flex items-center gap-3.5">
                           <MerchantLogo name={sub.merchant_name} size="md" />
                           <div>
@@ -333,11 +333,11 @@ export const Reminders: React.FC = () => {
                                 {sub.merchant_name}
                               </span>
                               {sub.status === 'trial' ? (
-                                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A]">
+                                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#FEF3C7] dark:bg-amber-950/60 text-[#92400E] dark:text-amber-300 border border-[#FDE68A] dark:border-amber-800">
                                   Trial Expire Soon
                                 </span>
                               ) : (
-                                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#EEF2FF] text-[#2446D8] border border-blue-100">
+                                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#EEF2FF] dark:bg-blue-950/60 text-[#2446D8] dark:text-blue-300 border border-blue-100 dark:border-blue-900">
                                   Renewal Notice
                                 </span>
                               )}
@@ -360,7 +360,7 @@ export const Reminders: React.FC = () => {
                         </div>
 
                         <div className="flex flex-col items-end gap-3 shrink-0 ml-3">
-                          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#EEF2FF] text-[#2446D8] font-bold text-xs">
+                          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#EEF2FF] dark:bg-blue-950/60 text-[#2446D8] dark:text-blue-300 font-bold text-xs">
                             <Calendar className="w-3.5 h-3.5" />
                             <span>Scheduled</span>
                           </div>
@@ -516,7 +516,7 @@ export const Reminders: React.FC = () => {
                     <span className="text-[11px] text-slate-400">shubham@example.com</span>
                   </div>
                 </div>
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900">
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
                   Active
                 </span>
               </div>
@@ -535,7 +535,7 @@ export const Reminders: React.FC = () => {
                     <span className="text-[11px] text-slate-400">Top bell + Overview widget</span>
                   </div>
                 </div>
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900">
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
                   Active
                 </span>
               </div>
@@ -583,6 +583,7 @@ export const Reminders: React.FC = () => {
               </h3>
               <button
                 onClick={() => setShowCreateModal(false)}
+                aria-label="Close"
                 className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-white"
               >
                 <X className="w-4 h-4" />
@@ -617,7 +618,7 @@ export const Reminders: React.FC = () => {
                     required
                     value={scheduledDate}
                     onChange={(e) => setScheduledDate(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white dark:[color-scheme:dark]"
                   />
                 </div>
 
@@ -726,6 +727,7 @@ export const Reminders: React.FC = () => {
               </h3>
               <button
                 onClick={() => setShowRulesModal(false)}
+                aria-label="Close"
                 className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-white"
               >
                 <X className="w-4 h-4" />
@@ -793,6 +795,7 @@ export const Reminders: React.FC = () => {
               </h3>
               <button
                 onClick={() => setShowSetDateModal(false)}
+                aria-label="Close"
                 className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-white"
               >
                 <X className="w-4 h-4" />
@@ -821,7 +824,7 @@ export const Reminders: React.FC = () => {
                   required
                   value={manualDateInput}
                   onChange={(e) => setManualDateInput(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-semibold"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-semibold dark:[color-scheme:dark]"
                 />
               </div>
 
@@ -871,6 +874,7 @@ export const Reminders: React.FC = () => {
               </div>
               <button
                 onClick={() => setShowDiagnosticModal(false)}
+                aria-label="Close"
                 className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer"
               >
                 <X className="w-4 h-4" />
