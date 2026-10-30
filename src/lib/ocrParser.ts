@@ -1,6 +1,6 @@
 import { createWorker } from 'tesseract.js';
 import { SubscriptionCategory, Currency } from '../types';
-import { processInvoiceDocument, InvoiceExtractionResult, sanitizePdfExtractedText } from './invoiceExtractor';
+import { processInvoiceDocument, InvoiceExtractionResult, sanitizePdfExtractedText, identifyMerchant } from './invoiceExtractor';
 
 export interface ParsedTransaction {
   merchantName: string;
@@ -943,10 +943,10 @@ export function extractTransactionsFromText(
     detectedCurrency = userPreferredCurrency;
   }
 
-  // Pass 3: Check filename for amount (e.g. "Invoice_649_INR.pdf" or "bill_1499.png")
+  // Pass 3: Check filename for amount (e.g. "Invoice_649_INR.pdf" or "Spotify_119_INR.png")
   if (!finalTotalAmount) {
-    const fnMatch = filename.match(/\b([0-9]{1,5}(?:\.[0-9]{1,2})?)\b/);
-    if (fnMatch) {
+    const fnMatch = filename.match(/(?:^|[^0-9.])([0-9]{1,5}(?:\.[0-9]{1,2})?)(?:[^0-9.]|$)/);
+    if (fnMatch && fnMatch[1]) {
       const val = parseFloat(fnMatch[1]);
       if (val && !isNaN(val) && !(val >= 2020 && val <= 2030 && Number.isInteger(val))) {
         finalTotalAmount = val;
@@ -971,77 +971,83 @@ export function extractTransactionsFromText(
   }
 
   // 3. Cadence Detection from Text
-  let detectedCadence: 'monthly' | 'yearly' = 'monthly';
+  let detectedCadence: 'monthly' | 'yearly' | 'unknown' = 'unknown';
   if (/yearly|annual|annually|per\s*year|\/yr|\/year|12\s*months/i.test(text) || /annual|yearly/i.test(filename)) {
     detectedCadence = 'yearly';
+  } else if (/monthly|per\s*month|\/mo|\/month|every\s*month/i.test(text) || /monthly/i.test(filename)) {
+    detectedCadence = 'monthly';
   }
 
   // 4. Extract Renewal / Next Billing Date from Invoice Text
-  const foundRenewalDate = extractRenewalDateFromText(text, detectedCadence, detectedCurrency === 'INR');
+  const foundRenewalDate = extractRenewalDateFromText(text, detectedCadence === 'yearly' ? 'yearly' : 'monthly', detectedCurrency === 'INR');
 
   // 5. Extract Payment Source Account
   const paymentSource = extractPaymentSourceFromText(text, detectedCurrency);
 
-  // 6. Identify Merchant
-  const candidates: ParsedTransaction[] = [];
+  // 6. Gather all detected monetary amounts for interactive autofill
+  const detectedAmountsList: number[] = [];
+  const symbolMatches = text.matchAll(/(?:₹|rs\.?|inr|usd|eur|gbp|\$|€|£)\s*([0-9]{1,3}(?:,[0-9]{2,3})*(?:\.[0-9]{1,2})?|[0-9]{2,6})/gi);
+  for (const sm of symbolMatches) {
+    const val = parseFloat(sm[1].replace(/,/g, ''));
+    if (val && !isNaN(val) && val > 0 && !(val >= 2020 && val <= 2030 && Number.isInteger(val))) {
+      if (!detectedAmountsList.includes(val)) {
+        detectedAmountsList.push(val);
+      }
+    }
+  }
+  if (finalTotalAmount > 0 && !detectedAmountsList.includes(finalTotalAmount)) {
+    detectedAmountsList.push(finalTotalAmount);
+  }
 
-  for (const m of KNOWN_MERCHANTS) {
-    const hasMatch = m.patterns.some((p) => p.test(text) || p.test(filename));
-    if (hasMatch) {
-      const amt = finalTotalAmount > 0 ? finalTotalAmount : m.defaultAmounts[detectedCurrency] || 19.99;
-      candidates.push({
-        merchantName: m.name,
-        rawString: `${m.name.toUpperCase().replace(/\s+/g, '_')}*RECURRING_COMMITMENT`,
-        amount: amt,
-        currency: detectedCurrency,
-        date: foundRenewalDate,
-        renewalDate: foundRenewalDate,
-        paymentSource: paymentSource || undefined,
-        cadence: m.cadence || detectedCadence,
-        category: m.category,
-        confidence: finalTotalAmount > 0 ? 96 : 85,
-        isDuplicate: m.name.toLowerCase().includes('netflix'),
-        duplicateMerchant: m.name.toLowerCase().includes('netflix') ? 'Netflix 4K Tier' : undefined,
-        isRecurring: true,
-        detectedAmounts: [amt],
-        ocrSnippet: text.slice(0, 180),
-      });
+  // 7. Strict Amount Handling: NEVER substitute missing amounts with fake defaults (like 19.99 or 1499.00)
+  const amt = finalTotalAmount > 0 ? finalTotalAmount : null;
+  const amountStatus: 'verified' | 'not_found' = amt !== null ? 'verified' : 'not_found';
+
+  // 8. Identify Merchant without hardcoded fallback duplicates
+  const identified = identifyMerchant(text, filename);
+  const identifiedName = identified.merchantName.value;
+
+  let chosenMerchant = identifiedName;
+  let chosenCategory: SubscriptionCategory = identified.category;
+  let chosenConfidence = amt !== null ? 95 : 80;
+
+  if (!chosenMerchant) {
+    for (const m of KNOWN_MERCHANTS) {
+      if (m.patterns.some((p) => p.test(text) || p.test(filename))) {
+        chosenMerchant = m.name;
+        chosenCategory = m.category;
+        break;
+      }
     }
   }
 
-  // 7. If no known merchant identified, dynamically extract merchant from invoice text
-  if (candidates.length === 0) {
+  if (!chosenMerchant) {
     const extractedMerchant = extractMerchantNameFromText(text, filename);
-    const amt =
-      finalTotalAmount > 0
-        ? finalTotalAmount
-        : detectedCurrency === 'INR'
-        ? 1499.00
-        : detectedCurrency === 'EUR'
-        ? 27.00
-        : detectedCurrency === 'GBP'
-        ? 23.00
-        : 29.00;
-
-    candidates.push({
-      merchantName: extractedMerchant.name,
-      rawString: `${extractedMerchant.name.toUpperCase().replace(/\s+/g, '_')}*INVOICE_BILLING`,
-      amount: amt,
-      currency: detectedCurrency,
-      date: foundRenewalDate,
-      renewalDate: foundRenewalDate,
-      paymentSource: paymentSource || undefined,
-      cadence: detectedCadence,
-      category: extractedMerchant.category,
-      confidence: finalTotalAmount > 0 ? extractedMerchant.confidence : 70,
-      isDuplicate: false,
-      isRecurring: true,
-      detectedAmounts: [amt],
-      ocrSnippet: text.slice(0, 180),
-    });
+    chosenMerchant = extractedMerchant.name;
+    chosenCategory = extractedMerchant.category;
+    chosenConfidence = amt !== null ? extractedMerchant.confidence : 70;
   }
 
-  return candidates;
+  const primaryCandidate: ParsedTransaction = {
+    merchantName: chosenMerchant,
+    rawString: `${chosenMerchant.toUpperCase().replace(/\s+/g, '_')}*INVOICE_BILLING`,
+    amount: amt,
+    amountStatus,
+    currency: detectedCurrency,
+    date: foundRenewalDate,
+    renewalDate: foundRenewalDate,
+    paymentSource: paymentSource || undefined,
+    cadence: detectedCadence,
+    category: chosenCategory,
+    confidence: chosenConfidence,
+    isDuplicate: false,
+    duplicateMerchant: undefined,
+    isRecurring: true,
+    detectedAmounts: detectedAmountsList.length > 0 ? detectedAmountsList : (amt !== null ? [amt] : []),
+    ocrSnippet: text.slice(0, 180),
+  };
+
+  return [primaryCandidate];
 }
 
 // =========================================================================

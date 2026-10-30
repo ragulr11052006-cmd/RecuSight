@@ -72,68 +72,6 @@ export const AddSubscriptionPage: React.FC = () => {
   const [extractionDone, setExtractionDone] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Helper to generate candidate entities adapted to user's preferred currency
-  const getDefaultCandidates = (prefCurrency: Currency = 'USD'): ParsedTransaction[] => {
-    const isINR = prefCurrency === 'INR';
-    return [
-      {
-        merchantName: 'FastSpring*Software',
-        rawString: 'FS*FASTSPRING.NET 877-327-8914',
-        amount: isINR ? 2499.0 : 29.0,
-        currency: prefCurrency,
-        date: '2026-10-26',
-        renewalDate: '2026-11-26',
-        cadence: 'monthly',
-        category: 'Software & Tools',
-        confidence: 68,
-        isDuplicate: false,
-        isRecurring: true,
-        notes: 'Possible Subscription (Needs Review)',
-        detectedAmounts: [isINR ? 2499.0 : 29.0],
-        ocrSnippet: isINR
-          ? 'FASTSPRING.NET INVOICE #8841 TOTAL AMOUNT DUE: ₹2,499.00 PAID NOV 2026'
-          : 'FASTSPRING.NET INVOICE #8841 TOTAL AMOUNT DUE: $29.00 PAID NOV 2026',
-      },
-      {
-        merchantName: 'Netflix.com Entertainment',
-        rawString: 'NETFLIX.COM*PAYMENTS',
-        amount: isINR ? 649.0 : 19.99,
-        currency: prefCurrency,
-        date: '2026-10-28',
-        renewalDate: '2026-11-28',
-        cadence: 'monthly',
-        category: 'Streaming & Ent',
-        confidence: 96,
-        isDuplicate: true,
-        duplicateMerchant: 'Netflix 4K Tier',
-        isRecurring: true,
-        notes: 'Matches Existing Subscription',
-        detectedAmounts: [isINR ? 649.0 : 19.99],
-        ocrSnippet: isINR
-          ? 'NETFLIX STREAMING MONTHLY BILLING TOTAL CHARGED: ₹649.00 OCT 28'
-          : 'NETFLIX STREAMING MONTHLY BILLING TOTAL CHARGED: $19.99 OCT 28',
-      },
-      {
-        merchantName: 'Local Coffee Bar #4...',
-        rawString: 'POS*COFFEE_BAR_ROASTERY',
-        amount: isINR ? 350.0 : 4.5,
-        currency: prefCurrency,
-        date: '2026-10-24',
-        renewalDate: '2026-10-24',
-        cadence: 'monthly',
-        category: 'Other Misc',
-        confidence: 90,
-        isDuplicate: false,
-        isRecurring: false,
-        notes: 'One-off Excluded',
-        detectedAmounts: [isINR ? 350.0 : 4.5],
-        ocrSnippet: isINR
-          ? 'POS LOCAL COFFEE ROASTERS ₹350.00 ONE-TIME RECEIPT'
-          : 'POS LOCAL COFFEE ROASTERS $4.50 ONE-TIME RECEIPT',
-      },
-    ];
-  };
-
   const userPreferredCurrency = user?.preferred_currency || 'USD';
   const [candidates, setCandidates] = useState<ParsedTransaction[]>([]);
   const [selectedCandidateIndex, setSelectedCandidateIndex] = useState<number>(0);
@@ -408,28 +346,6 @@ export const AddSubscriptionPage: React.FC = () => {
       setFormAmount('');
     } finally {
       setIsProcessing(false);
-    }
-  };
-
-  const handleLoadDemoStatement = () => {
-    const fakeFile = new File(['mock content'], 'HDFC_Statement_Oct2026.pdf', {
-      type: 'application/pdf',
-    });
-    setFile(fakeFile);
-    setPreviewUrl(null);
-    const defaultList = getDefaultCandidates(user?.preferred_currency || 'USD');
-    setCandidates(defaultList);
-    setSelectedCandidateIndex(0);
-    setExtractionDone(true);
-    if (defaultList[0]) {
-      setFormCurrency(defaultList[0].currency);
-      setFormAmount(defaultList[0].amount !== null && defaultList[0].amount !== undefined ? defaultList[0].amount.toFixed(2) : '');
-      setFormMerchantName(defaultList[0].merchantName);
-      setFormCategory(defaultList[0].category);
-      setFormCadence(defaultList[0].cadence === 'yearly' ? 'yearly' : 'monthly');
-      setFormRenewalDate(defaultList[0].renewalDate || defaultList[0].date || '');
-      setFormPaymentSourceId(user?.preferred_currency === 'INR' ? 'HDFC Bank Salary A/c •••• 4092' : 'HDFC Visa Signature ending in •••• 4092');
-      setFormUnconfirmedEstimate(defaultList[0].confidence < 80);
     }
   };
 
@@ -750,23 +666,12 @@ export const AddSubscriptionPage: React.FC = () => {
                       <span>{statusMessage}</span>
                     </div>
                   ) : (
-                    <div className="mt-5 flex flex-col gap-2">
+                    <div className="mt-5 flex flex-col items-center gap-2">
                       <button
                         type="button"
                         className="py-2 px-5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-white text-xs font-bold shadow-xs hover:bg-slate-50 dark:hover:bg-slate-700"
                       >
                         Browse Files
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleLoadDemoStatement();
-                        }}
-                        className="text-[11px] font-semibold text-[#2446D8] hover:underline"
-                      >
-                        Or Load Reference HDFC Statement Demo
                       </button>
                     </div>
                   )}

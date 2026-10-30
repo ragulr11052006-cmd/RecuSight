@@ -387,4 +387,102 @@ describe('Invoice Upload & Extraction Accuracy Test Suite', () => {
       expect(pay1.value).not.toBe(pay2.value);
     });
   });
+
+  // =========================================================================
+  // 11. UNIVERSAL ARBITRARY SAAS INVOICE EXTRACTION (NO HARDCODED VENDORS)
+  // =========================================================================
+  describe('Universal Arbitrary SaaS Extraction', () => {
+    it('accurately extracts unknown German SaaS vendor and European amount without defaulting', () => {
+      const germanInvoice = `
+        Superscale Analytics GmbH
+        Friedrichstraße 123, 10117 Berlin, Germany
+        Steuer-Nr: 30/123/45678
+        Rechnung / Invoice #SSA-2026-8810
+        Datum / Date: 14.10.2026
+        Leistungszeitraum: 14.10.2026 - 13.11.2026
+        Beschreibung: Enterprise Telemetry & Cloud Metrics Plan
+        Nettobetrag: 125,21 €
+        USt (19%): 23,79 €
+        Gesamtbetrag / Total Amount: 149,00 €
+        Zahlungsmethode: SEPA Direct Debit ending in 4109
+        Nächste Verlängerung: 14.11.2026
+      `;
+
+      const merchant = identifyMerchant(germanInvoice, 'Superscale_Invoice.pdf');
+      expect(merchant.merchantName.value).toContain('Superscale Analytics');
+      expect(merchant.merchantName.value).not.toBe('Adobe');
+      expect(merchant.merchantName.value).not.toBe('Netflix');
+
+      const amount = extractTotalAmountAndCurrency(germanInvoice, 'Superscale_Invoice.pdf', 'EUR');
+      expect(amount.currency.value).toBe('EUR');
+      expect(amount.totalAmount.value).toBe(149);
+      expect(amount.subtotal.value).toBe(125.21);
+      expect(amount.taxAmount.value).toBe(23.79);
+
+      const payment = extractPaymentMethod(germanInvoice);
+      expect(payment.value).toBe('SEPA Direct Debit •••• 4109');
+
+      const dates = extractDatesAndPeriod(germanInvoice);
+      expect(dates.invoiceDate.value).toBe('2026-10-14');
+      expect(dates.renewalDate.value).toBe('2026-11-14');
+    });
+
+    it('accurately extracts unknown US SaaS vendor with custom pricing ($89.50)', () => {
+      const usSaaSInvoice = `
+        CloudFlow Technologies Inc.
+        555 Silicon Way, Suite 400, Austin, TX 78701
+        INVOICE #CF-99201
+        Invoice Date: October 24, 2026
+        Billed To: Acme Corp
+        Item Description: CloudFlow Worker Fleet - 10 Dedicated Nodes
+        Subtotal: $85.00
+        Sales Tax: $4.50
+        Final Total Paid: $89.50
+        Payment Method: Mastercard ending in 6621
+      `;
+
+      const merchant = identifyMerchant(usSaaSInvoice, 'CloudFlow_Inv.pdf');
+      expect(merchant.merchantName.value).toContain('CloudFlow Technologies');
+
+      const amount = extractTotalAmountAndCurrency(usSaaSInvoice, 'CloudFlow_Inv.pdf', 'USD');
+      expect(amount.currency.value).toBe('USD');
+      expect(amount.totalAmount.value).toBe(89.5);
+      expect(amount.subtotal.value).toBe(85);
+      expect(amount.taxAmount.value).toBe(4.5);
+
+      const payment = extractPaymentMethod(usSaaSInvoice);
+      expect(payment.value).toBe('Mastercard •••• 6621');
+    });
+
+    it('accurately extracts unknown Indian SaaS vendor with custom pricing (₹4,999.00)', () => {
+      const indianSaaSInvoice = `
+        Billed By: IndicAI Solutions Pvt Ltd
+        GSTIN: 29AABCU9603R1ZM
+        Tax Invoice Number: IND-2026-091
+        Date of Invoice: 28-10-2026
+        Subscription: IndicLLM Fine-Tuning Cluster Tier 2
+        Subtotal: ₹4,236.44
+        CGST 9%: ₹381.28
+        SGST 9%: ₹381.28
+        Total Invoice Value: ₹4,999.00
+        Payment Mode: UPI AutoPay (team@okaxis)
+        Billing Cadence: Monthly Subscription
+      `;
+
+      const merchant = identifyMerchant(indianSaaSInvoice, 'IndicAI_Tax_Invoice.pdf');
+      expect(merchant.merchantName.value).toContain('IndicAI Solutions');
+
+      const amount = extractTotalAmountAndCurrency(indianSaaSInvoice, 'IndicAI_Tax_Invoice.pdf', 'INR');
+      expect(amount.currency.value).toBe('INR');
+      expect(amount.totalAmount.value).toBe(4999);
+      expect(amount.subtotal.value).toBe(4236.44);
+
+      const payment = extractPaymentMethod(indianSaaSInvoice);
+      expect(payment.value).toBe('UPI AutoPay (team@okaxis)');
+
+      const dates = extractDatesAndPeriod(indianSaaSInvoice);
+      expect(dates.invoiceDate.value).toBe('2026-10-28');
+      expect(dates.billingFrequency.value).toBe('monthly');
+    });
+  });
 });
