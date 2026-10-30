@@ -1,7 +1,9 @@
 import React, { useState, useRef } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import { db } from '../../lib/supabase';
+import { parseDocument } from '../../lib/ocrParser';
 import {
   SubscriptionCategory,
   BillingIntervalUnit,
@@ -40,10 +42,12 @@ interface ExtractedCandidate {
   duplicateMerchant?: string;
   isRecurring: boolean;
   selected: boolean;
+  paymentSource?: string;
 }
 
 export const AddUploadInvoice: React.FC = () => {
   const { user } = useAuth();
+  const { theme } = useTheme();
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -84,9 +88,9 @@ export const AddUploadInvoice: React.FC = () => {
     }
   };
 
-  const processSelectedFile = (selectedFile: File) => {
+  const processSelectedFile = async (selectedFile: File) => {
     const validTypes = ['application/pdf', 'image/png', 'image/jpeg', 'text/csv'];
-    if (!validTypes.includes(selectedFile.type) && !selectedFile.name.endsWith('.csv')) {
+    if (!validTypes.includes(selectedFile.type) && !selectedFile.name.endsWith('.csv') && !selectedFile.name.endsWith('.pdf')) {
       alert('Invalid file format. Please upload a PDF, PNG, JPG, or CSV file.');
       return;
     }
@@ -98,75 +102,84 @@ export const AddUploadInvoice: React.FC = () => {
 
     setFile(selectedFile);
     setIsProcessing(true);
-    setUploadProgress(20);
+    setUploadProgress(25);
 
-    // Document processing simulation / OCR extraction
-    const progressInterval = setInterval(() => {
-      setUploadProgress((prev) => {
-        if (prev >= 90) {
-          clearInterval(progressInterval);
-          return 95;
-        }
-        return prev + 25;
-      });
-    }, 200);
+    try {
+      const prefCur = (user?.preferred_currency as any) || 'USD';
+      const extracted = await parseDocument(
+        selectedFile,
+        () => {
+          setUploadProgress((p) => Math.min(90, p + 25));
+        },
+        prefCur
+      );
 
-    setTimeout(() => {
-      clearInterval(progressInterval);
       setUploadProgress(100);
       setIsProcessing(false);
       setExtractionDone(true);
 
-      // Match extracted items from Figma screen 5 (Add Subscription - Uploaded File)
-      const mockExtracted: ExtractedCandidate[] = [
-        {
-          id: 'ext-1',
-          merchantName: 'FastSpring (Paddle / MacPaw)',
-          rawString: "FS*FASTSPRING.NET 877-327-8914",
-          amount: 54.99,
-          currency: 'USD',
-          date: '2026-11-26',
-          cadence: 'yearly',
+      if (extracted.length > 0) {
+        const mapped: ExtractedCandidate[] = extracted.map((item, idx) => ({
+          id: `ext-${idx + 1}`,
+          merchantName: item.merchantName,
+          rawString: item.rawString,
+          amount: item.amount,
+          currency: item.currency,
+          date: item.renewalDate || item.date,
+          cadence: item.cadence,
+          category: item.category,
+          confidence: item.confidence,
+          isDuplicate: item.isDuplicate,
+          duplicateMerchant: item.duplicateMerchant,
+          isRecurring: item.isRecurring,
+          selected: idx === 0,
+          paymentSource: item.paymentSource,
+        }));
+        setCandidates(mapped);
+        setSelectedCandidate(mapped[0]);
+      } else {
+        const cleanName = selectedFile.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+        const fallback: ExtractedCandidate = {
+          id: 'ext-fallback',
+          merchantName: cleanName,
+          rawString: selectedFile.name,
+          amount: 0,
+          currency: prefCur,
+          date: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
+          cadence: 'monthly',
           category: 'Software & Tools',
-          confidence: 85,
+          confidence: 65,
           isDuplicate: false,
           isRecurring: true,
           selected: true,
-        },
-        {
-          id: 'ext-2',
-          merchantName: 'Google Cloud Platform',
-          rawString: "GOOGLE *CLOUD_PAYMENTS G.CO/HELPPAY",
-          amount: 42.10,
-          currency: 'USD',
-          date: '2026-10-22',
-          cadence: 'monthly',
-          category: 'Utilities & Cloud',
-          confidence: 94,
-          isDuplicate: false,
-          isRecurring: true,
-          selected: false,
-        },
-        {
-          id: 'ext-3',
-          merchantName: 'Adobe Creative Cloud',
-          rawString: "ADOBE *CREATIVE CLD 800-833-6687",
-          amount: 54.99,
-          currency: 'USD',
-          date: '2026-10-18',
-          cadence: 'monthly',
-          category: 'Design',
-          confidence: 98,
-          isDuplicate: true,
-          duplicateMerchant: 'Adobe After Effects',
-          isRecurring: true,
-          selected: false,
-        },
-      ];
-
-      setCandidates(mockExtracted);
-      setSelectedCandidate(mockExtracted[0]);
-    }, 1200);
+          paymentSource: prefCur === 'INR' ? 'UPI AutoPay / Bank Mandate' : 'Primary Corporate Card •••• 4092',
+        };
+        setCandidates([fallback]);
+        setSelectedCandidate(fallback);
+      }
+    } catch (err) {
+      console.error('Invoice scanning error:', err);
+      setIsProcessing(false);
+      setExtractionDone(true);
+      const cleanName = selectedFile.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+      const fallback: ExtractedCandidate = {
+        id: 'ext-error',
+        merchantName: cleanName,
+        rawString: selectedFile.name,
+        amount: 0,
+        currency: (user?.preferred_currency as any) || 'USD',
+        date: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
+        cadence: 'monthly',
+        category: 'Software & Tools',
+        confidence: 50,
+        isDuplicate: false,
+        isRecurring: true,
+        selected: true,
+        paymentSource: 'Primary Corporate Card •••• 4092',
+      };
+      setCandidates([fallback]);
+      setSelectedCandidate(fallback);
+    }
   };
 
   const handleReset = () => {
@@ -190,6 +203,7 @@ export const AddUploadInvoice: React.FC = () => {
       billing_interval: 1,
       billing_interval_unit: selectedCandidate.cadence === 'yearly' ? 'years' : 'months',
       next_billing_date: selectedCandidate.date,
+      payment_mode_label: selectedCandidate.paymentSource,
       status: unconfirmedEstimate ? 'needs_review' : 'active',
       confidence_status: unconfirmedEstimate ? 'unconfirmed_estimate' : 'verified',
       notes: `Extracted from statement: ${selectedCandidate.rawString}`,
@@ -425,6 +439,21 @@ export const AddUploadInvoice: React.FC = () => {
 
                   <div className="space-y-3 text-xs">
                     <div>
+                      <label className="block text-slate-400 font-semibold mb-1">Service / Merchant Name</label>
+                      <input
+                        type="text"
+                        value={selectedCandidate.merchantName}
+                        onChange={(e) =>
+                          setSelectedCandidate({
+                            ...selectedCandidate,
+                            merchantName: e.target.value,
+                          })
+                        }
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-bold"
+                      />
+                    </div>
+
+                    <div>
                       <label className="block text-slate-400 font-semibold mb-1">Expenditure Category</label>
                       <input
                         type="text"
@@ -444,6 +473,7 @@ export const AddUploadInvoice: React.FC = () => {
                         <label className="block text-slate-400 font-semibold mb-1">Observed Charge</label>
                         <input
                           type="number"
+                          step="0.01"
                           value={selectedCandidate.amount}
                           onChange={(e) =>
                             setSelectedCandidate({
@@ -484,7 +514,24 @@ export const AddUploadInvoice: React.FC = () => {
                             date: e.target.value,
                           })
                         }
-                        className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-medium dark:[color-scheme:dark]"
+                        style={{ colorScheme: theme === 'dark' ? 'dark' : 'light' }}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-medium"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-400 font-semibold mb-1">Payment Source Account</label>
+                      <input
+                        type="text"
+                        value={selectedCandidate.paymentSource || ''}
+                        onChange={(e) =>
+                          setSelectedCandidate({
+                            ...selectedCandidate,
+                            paymentSource: e.target.value,
+                          })
+                        }
+                        placeholder="e.g. HDFC Visa •••• 4090 or UPI AutoPay"
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-medium"
                       />
                     </div>
 

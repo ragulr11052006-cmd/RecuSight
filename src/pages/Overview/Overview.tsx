@@ -525,24 +525,23 @@ export const Overview: React.FC = () => {
                 </p>
               </div>
 
-              {spendTrendBadge.type === 'empty' ? (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 shrink-0">
-                  {spendTrendBadge.label}
-                </span>
-              ) : spendTrendBadge.type === 'positive' ? (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#E8F7EE] dark:bg-emerald-950/60 text-[#126639] dark:text-emerald-300 shrink-0">
-                  <TrendingUp className="w-3 h-3" />
-                  {spendTrendBadge.label}
-                </span>
-              ) : spendTrendBadge.type === 'negative' ? (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#FEF2F2] dark:bg-rose-950/60 text-[#991B1B] dark:text-rose-300 shrink-0">
-                  <TrendingDown className="w-3 h-3" />
-                  {spendTrendBadge.label}
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 shrink-0">
-                  {spendTrendBadge.label}
-                </span>
+              {/* Period spend trend badge: Only show when user has active subscriptions and real spend history */}
+              {activeSubs.length > 0 && monthlyRunRate > 0 && spendTrendBadge.type !== 'empty' && (
+                spendTrendBadge.type === 'positive' ? (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#E8F7EE] dark:bg-emerald-950/60 text-[#126639] dark:text-emerald-300 shrink-0">
+                    <TrendingUp className="w-3 h-3" />
+                    {spendTrendBadge.label}
+                  </span>
+                ) : spendTrendBadge.type === 'negative' ? (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#FEF2F2] dark:bg-rose-950/60 text-[#991B1B] dark:text-rose-300 shrink-0">
+                    <TrendingDown className="w-3 h-3" />
+                    {spendTrendBadge.label}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 shrink-0">
+                    {spendTrendBadge.label}
+                  </span>
+                )
               )}
             </div>
 

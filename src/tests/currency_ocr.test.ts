@@ -3,6 +3,8 @@ import {
   convertCurrency,
   extractTransactionsFromText,
   extractRenewalDateFromText,
+  extractPaymentSourceFromText,
+  extractMerchantNameFromText,
   advanceDateString,
   parseAnyDateString,
   EXCHANGE_RATES,
@@ -121,5 +123,58 @@ describe('OCR & Heuristic Amount Extraction', () => {
     expect(advanceDateString('2026-10-31', 'monthly')).toBe('2026-11-30');
     expect(advanceDateString('2026-12-15', 'monthly')).toBe('2027-01-15');
     expect(advanceDateString('2026-10-15', 'yearly')).toBe('2027-10-15');
+  });
+
+  it('extracts Payment Source Account accurately from invoice text', () => {
+    // 1. Bank + Card
+    const text1 = 'Invoice #10293\nPaid with HDFC Bank Visa ending in 4090\nTotal: ₹1,499.00';
+    expect(extractPaymentSourceFromText(text1, 'INR')).toBe('HDFC Visa •••• 4090');
+
+    // 2. Card Brand + Last 4
+    const text2 = 'Payment Method: Mastercard ending in 8891\nAmount Paid: $20.00';
+    expect(extractPaymentSourceFromText(text2, 'USD')).toBe('Mastercard •••• 8891');
+
+    // 3. UPI AutoPay ID
+    const text3 = 'Subscription Auto-Debit\nUPI ID: rahul.sharma@okhdfcbank\nAmount: ₹649.00';
+    expect(extractPaymentSourceFromText(text3, 'INR')).toBe('UPI AutoPay (rahul.sharma@okhdfcbank)');
+
+    // 4. Google Pay UPI
+    const text4 = 'Paid via Google Pay UPI AutoPay\nTotal: ₹299.00';
+    expect(extractPaymentSourceFromText(text4, 'INR')).toBe('UPI AutoPay (Google Pay)');
+  });
+
+  it('extracts Merchant Name dynamically for unknown / custom vendors', () => {
+    const text1 = 'INVOICE\nBilled By: Acme Analytics Inc\nInvoice Date: Oct 20, 2026\nGrand Total: $49.00';
+    const m1 = extractMerchantNameFromText(text1, 'invoice.pdf');
+    expect(m1.name).toContain('Acme Analytics');
+
+    const text2 = 'Receipt from CloudStack Hosting LLC\nTotal Charged: $12.00\nPayment Due: Nov 20, 2026';
+    const m2 = extractMerchantNameFromText(text2, 'receipt.pdf');
+    expect(m2.name).toContain('CloudStack Hosting');
+  });
+
+  it('extracts all 4 essential fields: observed charge, renewal date, payment source, merchant name', () => {
+    const invoiceText = `
+      INVOICE #INV-2026-9921
+      Billed By: Cursor AI Pro
+      Invoice Date: Oct 25, 2026
+      Next Billing Date: Nov 25, 2026
+      Subtotal: $20.00
+      Tax: $0.00
+      Total Amount Paid: $20.00
+      Payment Method: HDFC Bank Visa ending in 4092
+    `;
+
+    const [cand] = extractTransactionsFromText(invoiceText, 'Cursor_Invoice.pdf', 'USD');
+    expect(cand).toBeDefined();
+    // 1. Merchant Name
+    expect(cand.merchantName).toBe('Cursor AI Pro');
+    // 2. Observed Charge
+    expect(cand.amount).toBe(20.0);
+    expect(cand.currency).toBe('USD');
+    // 3. Projected Renewal Date
+    expect(cand.renewalDate).toBe('2026-11-25');
+    // 4. Payment Source Account
+    expect(cand.paymentSource).toBe('HDFC Visa •••• 4092');
   });
 });

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import { db } from '../../lib/supabase';
 import { parseDocument, ParsedTransaction, convertCurrency } from '../../lib/ocrParser';
 import { MerchantLogo } from '../../components/common/MerchantLogo';
@@ -48,6 +49,7 @@ import {
 
 export const AddSubscriptionPage: React.FC = () => {
   const { user } = useAuth();
+  const { theme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -229,12 +231,15 @@ export const AddSubscriptionPage: React.FC = () => {
     if (activeCandidate) {
       setFormMerchantName(activeCandidate.merchantName);
       setFormCategory(activeCandidate.category);
-      setFormAmount(activeCandidate.amount.toFixed(2));
+      setFormAmount(activeCandidate.amount > 0 ? activeCandidate.amount.toFixed(2) : '');
       const candCurrency = (activeCandidate.currency as Currency) || 'USD';
       setFormCurrency(candCurrency);
       setFormCadence(activeCandidate.cadence === 'yearly' ? 'yearly' : 'monthly');
       setFormRenewalDate(activeCandidate.renewalDate || activeCandidate.date);
       setFormUnconfirmedEstimate(activeCandidate.confidence < 80);
+      if (activeCandidate.paymentSource) {
+        setFormPaymentSourceId(activeCandidate.paymentSource);
+      }
     }
   }, [selectedCandidateIndex, candidates]);
 
@@ -296,12 +301,12 @@ export const AddSubscriptionPage: React.FC = () => {
         const primaryCand = extracted[0];
         if (primaryCand) {
           setFormCurrency(primaryCand.currency);
-          setFormAmount(primaryCand.amount.toFixed(2));
+          setFormAmount(primaryCand.amount > 0 ? primaryCand.amount.toFixed(2) : '');
           setFormMerchantName(primaryCand.merchantName);
           setFormCategory(primaryCand.category);
           setFormCadence(primaryCand.cadence === 'yearly' ? 'yearly' : 'monthly');
           setFormRenewalDate(primaryCand.renewalDate || primaryCand.date);
-          setFormPaymentSourceId(prefCur === 'INR' ? 'HDFC Bank Salary A/c •••• 4092' : 'Corporate Card •••• 4092');
+          setFormPaymentSourceId(primaryCand.paymentSource || (prefCur === 'INR' ? 'UPI AutoPay / Bank Mandate' : 'Primary Corporate Card •••• 4092'));
           setFormUnconfirmedEstimate(primaryCand.confidence < 80);
         }
       } else {
@@ -914,7 +919,7 @@ export const AddSubscriptionPage: React.FC = () => {
                       placeholder="0.00"
                       value={formAmount}
                       onChange={(e) => setFormAmount(e.target.value)}
-                      className="w-full px-3 py-2.5 text-xs font-bold text-slate-900 dark:text-white bg-transparent focus:outline-none"
+                      className="w-full px-3 py-2.5 text-xs font-bold text-slate-900 dark:text-white bg-white dark:bg-slate-800 focus:outline-none"
                     />
                     <select
                       value={formCurrency}
@@ -947,40 +952,43 @@ export const AddSubscriptionPage: React.FC = () => {
                     { id: 'monthly', title: 'Monthly', desc: '(Standard)' },
                     { id: 'yearly', title: 'Yearly', desc: 'Billed annually' },
                     { id: 'unknown', title: 'Unknown', desc: 'Requires history' },
-                  ].map((cad) => (
-                    <button
-                      key={cad.id}
-                      type="button"
-                      onClick={() => setFormCadence(cad.id as any)}
-                      className={`p-3 rounded-xl border text-left transition-all ${
-                        formCadence === cad.id
-                          ? 'bg-[#EEF2FF] dark:bg-blue-950/50 border-2 border-[#2446D8] dark:border-blue-500'
-                          : 'bg-[#F8FAFC] dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <div
-                          className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${
-                            formCadence === cad.id
-                              ? 'border-[#2446D8] dark:border-blue-500 bg-white dark:bg-slate-900'
-                              : 'border-slate-400 dark:border-slate-500'
-                          }`}
-                        >
-                          {formCadence === cad.id && (
-                            <div className="w-2 h-2 rounded-full bg-[#2446D8] dark:bg-blue-500" />
-                          )}
+                  ].map((cad) => {
+                    const isSelected = formCadence === cad.id;
+                    return (
+                      <button
+                        key={cad.id}
+                        type="button"
+                        onClick={() => setFormCadence(cad.id as any)}
+                        className={`p-3 rounded-xl border text-left transition-all ${
+                          isSelected
+                            ? 'bg-blue-50/90 dark:bg-blue-950/70 border-2 border-[#2446D8] dark:border-blue-400 shadow-xs'
+                            : 'bg-white dark:bg-slate-800/90 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <div
+                            className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${
+                              isSelected
+                                ? 'border-[#2446D8] dark:border-blue-400 bg-white dark:bg-slate-900'
+                                : 'border-slate-400 dark:border-slate-500 bg-white dark:bg-slate-800'
+                            }`}
+                          >
+                            {isSelected && (
+                              <div className="w-2 h-2 rounded-full bg-[#2446D8] dark:bg-blue-400" />
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <span className="block font-bold text-xs text-slate-900 dark:text-white truncate">
+                              {cad.title}
+                            </span>
+                            <span className="block text-[10px] text-slate-500 dark:text-slate-400 truncate">
+                              {cad.desc}
+                            </span>
+                          </div>
                         </div>
-                        <div className="min-w-0">
-                          <span className="block font-bold text-xs text-slate-900 dark:text-white truncate">
-                            {cad.title}
-                          </span>
-                          <span className="block text-[10px] text-slate-500 dark:text-slate-400 truncate">
-                            {cad.desc}
-                          </span>
-                        </div>
-                      </div>
-                    </button>
-                  ))}
+                      </button>
+                    );
+                  })}
                 </div>
 
                 <label className="flex items-center gap-2 mt-2 cursor-pointer">
@@ -1015,11 +1023,12 @@ export const AddSubscriptionPage: React.FC = () => {
                   type="date"
                   value={formRenewalDate}
                   onChange={(e) => setFormRenewalDate(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none dark:[color-scheme:dark]"
+                  style={{ colorScheme: theme === 'dark' ? 'dark' : 'light' }}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#2446D8]"
                 />
 
                 {/* Mark as Unconfirmed Estimate Box */}
-                <div className="p-3.5 rounded-2xl bg-[#EEF2FF] dark:bg-slate-800/80 border border-blue-100 dark:border-slate-700 mt-2.5">
+                <div className="p-3.5 rounded-2xl bg-blue-50/80 dark:bg-slate-800/90 border border-blue-100 dark:border-slate-700 mt-2.5">
                   <label className="flex items-start gap-2.5 cursor-pointer">
                     <input
                       type="checkbox"
@@ -1041,19 +1050,25 @@ export const AddSubscriptionPage: React.FC = () => {
 
               {/* Payment Source Account */}
               <div>
-                <label className="block font-bold text-slate-800 dark:text-slate-200 mb-1.5">
-                  Payment Source Account
-                </label>
-                <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-[#F8FAFC] dark:bg-slate-800 flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <CreditCard className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                    <span className="font-semibold text-xs text-slate-900 dark:text-white">
-                      {formPaymentSourceId || (userPreferredCurrency === 'INR' ? 'UPI AutoPay / Bank Mandate' : 'Primary Corporate Card')}
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block font-bold text-slate-800 dark:text-slate-200">
+                    Payment Source Account
+                  </label>
+                  {formPaymentSourceId ? (
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold border border-emerald-200 dark:border-emerald-800">
+                      Matched Statement
                     </span>
-                  </div>
-                  <span className="px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold border border-emerald-200 dark:border-emerald-800">
-                    {formPaymentSourceId ? 'Matched' : 'Default Rail'}
-                  </span>
+                  ) : null}
+                </div>
+                <div className="relative">
+                  <CreditCard className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-blue-600 dark:text-blue-400" />
+                  <input
+                    type="text"
+                    value={formPaymentSourceId}
+                    onChange={(e) => setFormPaymentSourceId(e.target.value)}
+                    placeholder={userPreferredCurrency === 'INR' ? 'e.g. HDFC Visa •••• 4090 or UPI AutoPay' : 'e.g. Corporate Card •••• 4092'}
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[#2446D8]"
+                  />
                 </div>
               </div>
 
@@ -1320,7 +1335,8 @@ export const AddSubscriptionPage: React.FC = () => {
                       required
                       value={manualNextDate}
                       onChange={(e) => setManualNextDate(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none dark:[color-scheme:dark]"
+                      style={{ colorScheme: theme === 'dark' ? 'dark' : 'light' }}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none"
                     />
                   </div>
                 </div>
@@ -1394,7 +1410,8 @@ export const AddSubscriptionPage: React.FC = () => {
                         type="date"
                         value={trialEndDate}
                         onChange={(e) => setTrialEndDate(e.target.value)}
-                        className="w-full px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-900 dark:text-white dark:[color-scheme:dark]"
+                        style={{ colorScheme: theme === 'dark' ? 'dark' : 'light' }}
+                        className="w-full px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-900 dark:text-white"
                       />
                     </div>
                     <div>

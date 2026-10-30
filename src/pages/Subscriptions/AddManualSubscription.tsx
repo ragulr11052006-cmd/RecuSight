@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import { db } from '../../lib/supabase';
 import {
   SubscriptionCategory,
@@ -25,6 +26,7 @@ import {
 
 export const AddManualSubscription: React.FC = () => {
   const { user } = useAuth();
+  const { theme } = useTheme();
   const navigate = useNavigate();
 
   const [paymentSources, setPaymentSources] = useState<PaymentSource[]>([]);
@@ -385,7 +387,8 @@ export const AddManualSubscription: React.FC = () => {
                   required
                   value={nextBillingDate}
                   onChange={(e) => setNextBillingDate(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#2446D8] dark:[color-scheme:dark]"
+                  style={{ colorScheme: theme === 'dark' ? 'dark' : 'light' }}
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#2446D8]"
                 />
               </div>
             </div>
@@ -448,7 +451,8 @@ export const AddManualSubscription: React.FC = () => {
                       type="date"
                       value={trialStartDate}
                       onChange={(e) => setTrialStartDate(e.target.value)}
-                      className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 dark:[color-scheme:dark]"
+                      style={{ colorScheme: theme === 'dark' ? 'dark' : 'light' }}
+                      className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
                     />
                   </div>
                   <div>
@@ -459,7 +463,8 @@ export const AddManualSubscription: React.FC = () => {
                       type="date"
                       value={trialEndDate}
                       onChange={(e) => setTrialEndDate(e.target.value)}
-                      className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold text-amber-700 dark:text-amber-400 dark:[color-scheme:dark]"
+                      style={{ colorScheme: theme === 'dark' ? 'dark' : 'light' }}
+                      className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold text-amber-700 dark:text-amber-400"
                     />
                   </div>
                 </div>

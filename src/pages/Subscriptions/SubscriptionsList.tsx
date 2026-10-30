@@ -327,7 +327,7 @@ export const SubscriptionsList: React.FC = () => {
                   : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 border border-slate-200 dark:border-slate-700'
               }`}
             >
-              Inactive / Paused <span className="ml-1 opacity-90">{subscriptions.filter(s => s.status === 'paused' || s.status === 'cancelled').length}</span>
+              Paused <span className="ml-1 opacity-90">{subscriptions.filter(s => s.status === 'paused' || s.status === 'cancelled').length}</span>
             </button>
 
             <button
@@ -494,22 +494,46 @@ export const SubscriptionsList: React.FC = () => {
                           {sub.payment_mode_label || sub.payment_source?.display_name || 'HDFC Visa •••• 4090'}
                         </div>
                         <div className="mt-1">
-                          {sub.payment_mode_badge?.includes('InActive') ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold bg-[#FEE2E2] dark:bg-red-950/40 text-[#991B1B] dark:text-red-300 whitespace-nowrap">
-                              <span className="w-1.5 h-1.5 rounded-full bg-red-600 dark:bg-red-400 shrink-0" />
-                              <span>{sub.payment_mode_badge}</span>
-                            </span>
-                          ) : sub.payment_mode_badge?.includes('Annual') ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold bg-[#EEF2FF] dark:bg-blue-950/50 text-[#2446D8] dark:text-blue-300 whitespace-nowrap">
-                              <span className="w-1.5 h-1.5 rounded-full bg-[#2446D8] dark:bg-blue-400 shrink-0" />
-                              <span>{sub.payment_mode_badge}</span>
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold bg-[#E8F7EE] dark:bg-emerald-950/50 text-[#126639] dark:text-emerald-300 whitespace-nowrap">
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 dark:bg-emerald-400 shrink-0" />
-                              <span>{sub.payment_mode_badge || 'UPI AutoPay: Active'}</span>
-                            </span>
-                          )}
+                          {(() => {
+                            if (sub.payment_mode_badge?.includes('InActive')) {
+                              return (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold bg-red-50 dark:bg-red-950/50 text-[#991B1B] dark:text-red-300 border border-red-200/60 dark:border-red-900/40 whitespace-nowrap">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-red-600 dark:bg-red-400 shrink-0" />
+                                  <span>{sub.payment_mode_badge}</span>
+                                </span>
+                              );
+                            }
+                            if (sub.payment_mode_badge?.includes('Annual')) {
+                              return (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold bg-blue-50 dark:bg-blue-950/50 text-[#2446D8] dark:text-blue-300 border border-blue-200/60 dark:border-blue-900/40 whitespace-nowrap">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-[#2446D8] dark:bg-blue-400 shrink-0" />
+                                  <span>{sub.payment_mode_badge}</span>
+                                </span>
+                              );
+                            }
+                            // Determine accurate badge based on actual payment mode label
+                            const label = (sub.payment_mode_label || sub.payment_source?.display_name || '').toLowerCase();
+                            const isCard = label.includes('visa') || label.includes('mastercard') || label.includes('card') || label.includes('ending in') || label.includes('••••');
+                            const isUpi = label.includes('upi') || label.includes('gpay') || label.includes('phonepe') || label.includes('paytm');
+                            const isWallet = label.includes('paypal') || label.includes('apple pay') || label.includes('wallet');
+
+                            const badgeText = sub.payment_mode_badge
+                              ? sub.payment_mode_badge
+                              : isUpi
+                              ? 'UPI AutoPay: Active'
+                              : isCard
+                              ? 'Card Auto-Debit: Active'
+                              : isWallet
+                              ? 'Wallet Auto-Debit'
+                              : 'AutoPay: Active';
+
+                            return (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold bg-emerald-50 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-850/60 whitespace-nowrap">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 dark:bg-emerald-400 shrink-0" />
+                                <span>{badgeText}</span>
+                              </span>
+                            );
+                          })()}
                         </div>
                       </td>
 

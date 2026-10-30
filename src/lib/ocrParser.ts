@@ -8,6 +8,7 @@ export interface ParsedTransaction {
   currency: Currency;
   date: string;
   renewalDate?: string;
+  paymentSource?: string;
   cadence: 'monthly' | 'yearly';
   category: SubscriptionCategory;
   confidence: number;
@@ -34,7 +35,7 @@ export function convertCurrency(amount: number, from: Currency, to: Currency): n
   return Math.round(converted * 100) / 100;
 }
 
-// Known merchants dictionary
+// Comprehensive dictionary of top subscription & SaaS merchants
 export const KNOWN_MERCHANTS: {
   patterns: RegExp[];
   name: string;
@@ -42,33 +43,13 @@ export const KNOWN_MERCHANTS: {
   cadence: 'monthly' | 'yearly';
   defaultAmounts: Record<Currency, number>;
 }[] = [
+  // Streaming & Entertainment
   {
     patterns: [/netflix/i, /netflix\.com/i],
     name: 'Netflix Premium',
     category: 'Streaming & Ent',
     cadence: 'monthly',
     defaultAmounts: { USD: 19.99, INR: 649, EUR: 17.99, GBP: 15.99 },
-  },
-  {
-    patterns: [/figma/i],
-    name: 'Figma Organization',
-    category: 'Software & Tools',
-    cadence: 'monthly',
-    defaultAmounts: { USD: 15.00, INR: 1299, EUR: 14.00, GBP: 12.00 },
-  },
-  {
-    patterns: [/adobe/i, /creative\s*cloud/i, /after\s*effects/i, /photoshop/i],
-    name: 'Adobe Creative Cloud',
-    category: 'Software & Tools',
-    cadence: 'monthly',
-    defaultAmounts: { USD: 54.99, INR: 4230, EUR: 60.00, GBP: 49.99 },
-  },
-  {
-    patterns: [/fastspring/i, /fs\*fastspring/i, /paddle/i, /macpaw/i],
-    name: 'FastSpring*Software',
-    category: 'Software & Tools',
-    cadence: 'yearly',
-    defaultAmounts: { USD: 29.00, INR: 2499, EUR: 27.00, GBP: 23.00 },
   },
   {
     patterns: [/spotify/i],
@@ -78,60 +59,18 @@ export const KNOWN_MERCHANTS: {
     defaultAmounts: { USD: 10.99, INR: 119, EUR: 10.99, GBP: 10.99 },
   },
   {
-    patterns: [/chatgpt/i, /openai/i],
-    name: 'ChatGPT Plus',
-    category: 'Productivity',
-    cadence: 'monthly',
-    defaultAmounts: { USD: 20.00, INR: 1999, EUR: 18.50, GBP: 16.00 },
-  },
-  {
-    patterns: [/google\s*cloud/i, /gcp/i, /google\s*\*cloud/i],
-    name: 'Google Cloud Platform',
-    category: 'Utilities & Cloud',
-    cadence: 'monthly',
-    defaultAmounts: { USD: 42.10, INR: 3640, EUR: 38.70, GBP: 33.20 },
-  },
-  {
-    patterns: [/notion/i],
-    name: 'Notion AI Plus',
-    category: 'Productivity',
-    cadence: 'monthly',
-    defaultAmounts: { USD: 10.00, INR: 850, EUR: 9.20, GBP: 7.90 },
-  },
-  {
-    patterns: [/canva/i],
-    name: 'Canva Pro',
-    category: 'Software & Tools',
-    cadence: 'monthly',
-    defaultAmounts: { USD: 12.99, INR: 499, EUR: 11.99, GBP: 10.99 },
-  },
-  {
-    patterns: [/youtube\s*premium/i, /google\s*\*youtube/i],
+    patterns: [/youtube\s*premium/i, /google\s*\*youtube/i, /youtube/i],
     name: 'YouTube Premium',
     category: 'Streaming & Ent',
     cadence: 'monthly',
     defaultAmounts: { USD: 13.99, INR: 149, EUR: 12.99, GBP: 11.99 },
   },
   {
-    patterns: [/github/i, /copilot/i],
-    name: 'GitHub Copilot',
-    category: 'Software & Tools',
-    cadence: 'monthly',
-    defaultAmounts: { USD: 10.00, INR: 865, EUR: 9.20, GBP: 7.90 },
-  },
-  {
-    patterns: [/amazon\s*prime/i, /prime\s*video/i, /amzn/i],
+    patterns: [/amazon\s*prime/i, /prime\s*video/i, /\bamzn\b/i],
     name: 'Amazon Prime',
     category: 'Entertainment',
     cadence: 'monthly',
     defaultAmounts: { USD: 14.99, INR: 299, EUR: 12.99, GBP: 11.99 },
-  },
-  {
-    patterns: [/apple/i, /icloud/i, /apple\.com/i],
-    name: 'Apple iCloud+ & Services',
-    category: 'Utilities & Cloud',
-    cadence: 'monthly',
-    defaultAmounts: { USD: 9.99, INR: 219, EUR: 9.99, GBP: 8.99 },
   },
   {
     patterns: [/disney/i, /hotstar/i],
@@ -141,18 +80,101 @@ export const KNOWN_MERCHANTS: {
     defaultAmounts: { USD: 12.99, INR: 899, EUR: 11.99, GBP: 10.99 },
   },
   {
-    patterns: [/swiggy/i, /swiggy\s*one/i],
-    name: 'Swiggy One Billed',
-    category: 'Other Misc',
+    patterns: [/apple\s*music/i],
+    name: 'Apple Music',
+    category: 'Streaming & Ent',
     cadence: 'monthly',
-    defaultAmounts: { USD: 3.99, INR: 299, EUR: 3.50, GBP: 2.99 },
+    defaultAmounts: { USD: 10.99, INR: 99, EUR: 10.99, GBP: 10.99 },
   },
   {
-    patterns: [/zomato/i, /zomato\s*gold/i],
-    name: 'Zomato Gold',
-    category: 'Other Misc',
+    patterns: [/audible/i],
+    name: 'Audible Membership',
+    category: 'Entertainment',
     cadence: 'monthly',
-    defaultAmounts: { USD: 3.99, INR: 299, EUR: 3.50, GBP: 2.99 },
+    defaultAmounts: { USD: 14.95, INR: 199, EUR: 9.95, GBP: 7.99 },
+  },
+
+  // AI & Developer Tools
+  {
+    patterns: [/chatgpt/i, /openai/i],
+    name: 'ChatGPT Plus',
+    category: 'Ai Assist',
+    cadence: 'monthly',
+    defaultAmounts: { USD: 20.00, INR: 1999, EUR: 18.50, GBP: 16.00 },
+  },
+  {
+    patterns: [/cursor/i, /cursor\.sh/i, /anysphere/i],
+    name: 'Cursor AI Pro',
+    category: 'Ai Assist',
+    cadence: 'monthly',
+    defaultAmounts: { USD: 20.00, INR: 1750, EUR: 18.50, GBP: 16.00 },
+  },
+  {
+    patterns: [/perplexity/i, /perplexity\.ai/i],
+    name: 'Perplexity Pro',
+    category: 'Ai Assist',
+    cadence: 'monthly',
+    defaultAmounts: { USD: 20.00, INR: 1750, EUR: 18.50, GBP: 16.00 },
+  },
+  {
+    patterns: [/claude/i, /anthropic/i],
+    name: 'Claude Pro',
+    category: 'Ai Assist',
+    cadence: 'monthly',
+    defaultAmounts: { USD: 20.00, INR: 1750, EUR: 18.50, GBP: 16.00 },
+  },
+  {
+    patterns: [/midjourney/i],
+    name: 'Midjourney Standard',
+    category: 'Ai Assist',
+    cadence: 'monthly',
+    defaultAmounts: { USD: 30.00, INR: 2500, EUR: 28.00, GBP: 24.00 },
+  },
+  {
+    patterns: [/github/i, /copilot/i],
+    name: 'GitHub Copilot',
+    category: 'Software & Tools',
+    cadence: 'monthly',
+    defaultAmounts: { USD: 10.00, INR: 865, EUR: 9.20, GBP: 7.90 },
+  },
+
+  // Design & Creative
+  {
+    patterns: [/figma/i],
+    name: 'Figma Organization',
+    category: 'Design',
+    cadence: 'monthly',
+    defaultAmounts: { USD: 15.00, INR: 1299, EUR: 14.00, GBP: 12.00 },
+  },
+  {
+    patterns: [/adobe/i, /creative\s*cloud/i, /after\s*effects/i, /photoshop/i, /illustrator/i],
+    name: 'Adobe Creative Cloud',
+    category: 'Design',
+    cadence: 'monthly',
+    defaultAmounts: { USD: 54.99, INR: 4230, EUR: 60.00, GBP: 49.99 },
+  },
+  {
+    patterns: [/canva/i],
+    name: 'Canva Pro',
+    category: 'Design',
+    cadence: 'monthly',
+    defaultAmounts: { USD: 12.99, INR: 499, EUR: 11.99, GBP: 10.99 },
+  },
+  {
+    patterns: [/framer/i],
+    name: 'Framer Pro',
+    category: 'Design',
+    cadence: 'monthly',
+    defaultAmounts: { USD: 20.00, INR: 1750, EUR: 18.00, GBP: 16.00 },
+  },
+
+  // Productivity & Collaboration
+  {
+    patterns: [/notion/i],
+    name: 'Notion AI Plus',
+    category: 'Productivity',
+    cadence: 'monthly',
+    defaultAmounts: { USD: 10.00, INR: 850, EUR: 9.20, GBP: 7.90 },
   },
   {
     patterns: [/slack/i],
@@ -168,7 +190,164 @@ export const KNOWN_MERCHANTS: {
     cadence: 'monthly',
     defaultAmounts: { USD: 9.99, INR: 619, EUR: 9.99, GBP: 8.99 },
   },
+  {
+    patterns: [/zoom/i, /zoom\.us/i],
+    name: 'Zoom Pro',
+    category: 'Productivity',
+    cadence: 'monthly',
+    defaultAmounts: { USD: 15.99, INR: 1320, EUR: 14.99, GBP: 12.99 },
+  },
+  {
+    patterns: [/grammarly/i],
+    name: 'Grammarly Premium',
+    category: 'Productivity',
+    cadence: 'monthly',
+    defaultAmounts: { USD: 12.00, INR: 999, EUR: 11.00, GBP: 9.50 },
+  },
+  {
+    patterns: [/1password/i],
+    name: '1Password Family',
+    category: 'Productivity',
+    cadence: 'monthly',
+    defaultAmounts: { USD: 4.99, INR: 399, EUR: 4.50, GBP: 3.99 },
+  },
+  {
+    patterns: [/linear/i, /linear\.app/i],
+    name: 'Linear Standard',
+    category: 'Productivity',
+    cadence: 'monthly',
+    defaultAmounts: { USD: 8.00, INR: 690, EUR: 7.50, GBP: 6.50 },
+  },
+
+  // Cloud & Utilities
+  {
+    patterns: [/google\s*cloud/i, /gcp/i, /google\s*\*cloud/i],
+    name: 'Google Cloud Platform',
+    category: 'Utilities & Cloud',
+    cadence: 'monthly',
+    defaultAmounts: { USD: 42.10, INR: 3640, EUR: 38.70, GBP: 33.20 },
+  },
+  {
+    patterns: [/aws/i, /amazon\s*web\s*services/i],
+    name: 'Amazon Web Services (AWS)',
+    category: 'Utilities & Cloud',
+    cadence: 'monthly',
+    defaultAmounts: { USD: 35.00, INR: 2999, EUR: 32.00, GBP: 28.00 },
+  },
+  {
+    patterns: [/supabase/i],
+    name: 'Supabase Pro Tier',
+    category: 'Utilities & Cloud',
+    cadence: 'monthly',
+    defaultAmounts: { USD: 25.00, INR: 2150, EUR: 23.00, GBP: 20.00 },
+  },
+  {
+    patterns: [/vercel/i],
+    name: 'Vercel Pro Team',
+    category: 'Utilities & Cloud',
+    cadence: 'monthly',
+    defaultAmounts: { USD: 20.00, INR: 1750, EUR: 18.50, GBP: 16.00 },
+  },
+  {
+    patterns: [/digitalocean/i, /digital\s*ocean/i],
+    name: 'DigitalOcean Droplet',
+    category: 'Utilities & Cloud',
+    cadence: 'monthly',
+    defaultAmounts: { USD: 12.00, INR: 999, EUR: 11.00, GBP: 9.50 },
+  },
+  {
+    patterns: [/hostinger/i],
+    name: 'Hostinger Business Web',
+    category: 'Utilities & Cloud',
+    cadence: 'yearly',
+    defaultAmounts: { USD: 47.88, INR: 3588, EUR: 44.00, GBP: 38.00 },
+  },
+  {
+    patterns: [/godaddy/i],
+    name: 'GoDaddy Domains & Hosting',
+    category: 'Utilities & Cloud',
+    cadence: 'yearly',
+    defaultAmounts: { USD: 22.99, INR: 1899, EUR: 21.00, GBP: 18.00 },
+  },
+  {
+    patterns: [/apple/i, /icloud/i, /apple\.com/i],
+    name: 'Apple iCloud+ & Services',
+    category: 'Utilities & Cloud',
+    cadence: 'monthly',
+    defaultAmounts: { USD: 9.99, INR: 219, EUR: 9.99, GBP: 8.99 },
+  },
+
+  // Food, Telecom & Everyday Utilities
+  {
+    patterns: [/swiggy/i, /swiggy\s*one/i],
+    name: 'Swiggy One Billed',
+    category: 'Other Misc',
+    cadence: 'monthly',
+    defaultAmounts: { USD: 3.99, INR: 299, EUR: 3.50, GBP: 2.99 },
+  },
+  {
+    patterns: [/zomato/i, /zomato\s*gold/i],
+    name: 'Zomato Gold',
+    category: 'Other Misc',
+    cadence: 'monthly',
+    defaultAmounts: { USD: 3.99, INR: 299, EUR: 3.50, GBP: 2.99 },
+  },
+  {
+    patterns: [/jiofiber/i, /reliance\s*jio/i, /\bjio\b/i],
+    name: 'JioFiber Broadband',
+    category: 'Utilities & Cloud',
+    cadence: 'monthly',
+    defaultAmounts: { USD: 11.99, INR: 999, EUR: 10.99, GBP: 9.50 },
+  },
+  {
+    patterns: [/airtel/i, /bharti\s*airtel/i],
+    name: 'Airtel Xstream Fiber',
+    category: 'Utilities & Cloud',
+    cadence: 'monthly',
+    defaultAmounts: { USD: 11.99, INR: 999, EUR: 10.99, GBP: 9.50 },
+  },
+  {
+    patterns: [/tata\s*play/i, /tata\s*sky/i],
+    name: 'Tata Play Billed',
+    category: 'Streaming & Ent',
+    cadence: 'monthly',
+    defaultAmounts: { USD: 5.99, INR: 450, EUR: 5.50, GBP: 4.90 },
+  },
+
+  // Resellers & Billing Platforms
+  {
+    patterns: [/fastspring/i, /fs\*fastspring/i],
+    name: 'FastSpring*Software',
+    category: 'Software & Tools',
+    cadence: 'yearly',
+    defaultAmounts: { USD: 29.00, INR: 2499, EUR: 27.00, GBP: 23.00 },
+  },
+  {
+    patterns: [/paddle/i, /paddle\.com/i],
+    name: 'Paddle.com Market',
+    category: 'Software & Tools',
+    cadence: 'monthly',
+    defaultAmounts: { USD: 19.00, INR: 1650, EUR: 17.50, GBP: 15.00 },
+  },
+  {
+    patterns: [/stripe/i],
+    name: 'Stripe Billing Commitment',
+    category: 'Software & Tools',
+    cadence: 'monthly',
+    defaultAmounts: { USD: 25.00, INR: 2150, EUR: 23.00, GBP: 20.00 },
+  },
+  {
+    patterns: [/razorpay/i],
+    name: 'Razorpay Mandate',
+    category: 'Software & Tools',
+    cadence: 'monthly',
+    defaultAmounts: { USD: 15.00, INR: 1299, EUR: 14.00, GBP: 12.00 },
+  },
 ];
+
+// =========================================================================
+// MAIN ENTRY POINT: parseDocument
+// =========================================================================
 
 export async function parseDocument(
   file: File,
@@ -177,6 +356,7 @@ export async function parseDocument(
 ): Promise<ParsedTransaction[]> {
   const isImage = file.type.startsWith('image/');
   const isCsv = file.name.endsWith('.csv') || file.type === 'text/csv';
+  const isPdf = file.name.endsWith('.pdf') || file.type === 'application/pdf';
 
   if (isCsv) {
     if (onProgress) onProgress('Parsing CSV statement records...');
@@ -185,34 +365,21 @@ export async function parseDocument(
 
   let extractedText = '';
 
-  if (isImage) {
-    if (onProgress) onProgress('Scanning invoice / screenshot for final total amount...');
-    try {
-      // Run OCR with a 5-second safeguard timeout
-      const ocrPromise = (async () => {
-        const worker = await createWorker('eng');
-        const result = await worker.recognize(file);
-        await worker.terminate();
-        return result.data.text;
-      })();
-
-      const timeoutPromise = new Promise<string>((resolve) => {
-        setTimeout(() => resolve(''), 5000);
-      });
-
-      extractedText = await Promise.race([ocrPromise, timeoutPromise]);
-    } catch (err) {
-      console.warn('OCR processing notice (falling back to pattern analysis):', err);
-    }
+  if (isPdf) {
+    if (onProgress) onProgress('Thoroughly scanning PDF document streams & metadata...');
+    extractedText = await extractTextFromPdf(file);
+  } else if (isImage) {
+    if (onProgress) onProgress('Scanning invoice / receipt image with OCR...');
+    extractedText = await extractTextFromImage(file, onProgress);
   } else {
-    // PDF or text file
+    // Text or plain file
     if (onProgress) onProgress('Reading statement contents...');
     extractedText = await readFileAsText(file).catch(() => '');
   }
 
-  // Combine OCR text with file name for complete coverage
+  // Combine OCR/PDF text with file name for complete coverage
   const combinedText = (extractedText + '\n' + file.name).trim();
-  if (onProgress) onProgress('Extracting final total invoice amount & currency...');
+  if (onProgress) onProgress('Extracting merchant, charge amount, renewal date & payment source...');
 
   return extractTransactionsFromText(combinedText, file.name, userPreferredCurrency);
 }
@@ -224,6 +391,138 @@ function readFileAsText(file: File): Promise<string> {
     reader.onerror = () => resolve('');
     reader.readAsText(file);
   });
+}
+
+// =========================================================================
+// PDF DECOMPRESSION & STREAM EXTRACTION ENGINE (ZERO DEPENDENCIES)
+// =========================================================================
+
+async function extractTextFromPdf(file: File): Promise<string> {
+  try {
+    const buffer = await file.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    const latin1 = new TextDecoder('latin1').decode(bytes);
+    let decompressedStreamsText = '';
+
+    // Search for all streams
+    const streamRegex = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
+    let match: RegExpExecArray | null;
+    while ((match = streamRegex.exec(latin1)) !== null) {
+      const streamStart = match.index + match[0].indexOf('\n') + 1;
+      const streamEnd = match.index + match[0].lastIndexOf('endstream');
+      const streamBytes = bytes.slice(streamStart, streamEnd);
+
+      // Check if it's FlateDecode or zlib
+      if (typeof DecompressionStream !== 'undefined') {
+        try {
+          const ds = new DecompressionStream('deflate');
+          const writer = ds.writable.getWriter();
+          writer.write(streamBytes);
+          writer.close();
+          const reader = ds.readable.getReader();
+          const chunks: Uint8Array[] = [];
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            if (value) chunks.push(value);
+          }
+          const totalLen = chunks.reduce((acc, c) => acc + c.length, 0);
+          const merged = new Uint8Array(totalLen);
+          let offset = 0;
+          for (const c of chunks) {
+            merged.set(c, offset);
+            offset += c.length;
+          }
+          decompressedStreamsText += '\n' + new TextDecoder('utf-8').decode(merged);
+          continue;
+        } catch {
+          // Stream is either not deflate or plain text
+        }
+      }
+      decompressedStreamsText += '\n' + new TextDecoder('latin1').decode(streamBytes);
+    }
+
+    const fullText = latin1 + '\n' + decompressedStreamsText;
+    const textPieces: string[] = [];
+
+    // Extract PDF text literals in (string) Tj or '
+    const tjRegex = /\(([^)\\]*(?:\\.[^)\\]*)*)\)\s*(?:Tj|'|")/g;
+    let tjMatch: RegExpExecArray | null;
+    while ((tjMatch = tjRegex.exec(fullText)) !== null) {
+      const clean = tjMatch[1]
+        .replace(/\\([\\()])/g, '$1')
+        .replace(/\\n/g, ' ')
+        .replace(/\\r/g, '')
+        .trim();
+      if (clean) textPieces.push(clean);
+    }
+
+    // Extract PDF array TJ: [(foo) 10 (bar)] TJ
+    const arrayTjRegex = /\[((?:[^\]\\]|\\.)*)\]\s*TJ/gi;
+    let arrMatch: RegExpExecArray | null;
+    while ((arrMatch = arrayTjRegex.exec(fullText)) !== null) {
+      const inner = arrMatch[1];
+      const subMatches = inner.match(/\(([^)\\]*(?:\\.[^)\\]*)*)\)/g) || [];
+      for (const sm of subMatches) {
+        const clean = sm.slice(1, -1).replace(/\\([\\()])/g, '$1').trim();
+        if (clean) textPieces.push(clean);
+      }
+    }
+
+    // Extract Hex strings: <48656c6c6f> Tj
+    const hexRegex = /<([0-9a-fA-F\s]+)>\s*(?:Tj|'|")/g;
+    let hexMatch: RegExpExecArray | null;
+    while ((hexMatch = hexRegex.exec(fullText)) !== null) {
+      const hex = hexMatch[1].replace(/\s+/g, '');
+      if (hex.length >= 2 && hex.length % 2 === 0) {
+        let str = '';
+        for (let i = 0; i < hex.length; i += 2) {
+          const code = parseInt(hex.substr(i, 2), 16);
+          if (code >= 32 && code <= 126) str += String.fromCharCode(code);
+        }
+        if (str.trim()) textPieces.push(str.trim());
+      }
+    }
+
+    if (textPieces.length > 0) {
+      return textPieces.join('\n');
+    }
+
+    // Fallback: clean ASCII sequences in latin1
+    const asciiMatches = latin1.match(/[A-Za-z0-9₹$€£.,:/\-@\s]{4,}/g) || [];
+    return asciiMatches.join(' ');
+  } catch (err) {
+    console.error('PDF parsing notice:', err);
+    return '';
+  }
+}
+
+// =========================================================================
+// IMAGE OCR ENGINE (TESSERACT WITH RESILIENT TIMEOUT)
+// =========================================================================
+
+async function extractTextFromImage(file: File, onProgress?: (msg: string) => void): Promise<string> {
+  try {
+    const ocrPromise = (async () => {
+      onProgress?.('Initializing Tesseract OCR worker...');
+      const worker = await createWorker('eng');
+      onProgress?.('Extracting text and figures from image...');
+      const result = await worker.recognize(file);
+      await worker.terminate();
+      return result.data.text;
+    })();
+
+    // 40-second generous timeout for OCR
+    const timeoutPromise = new Promise<string>((resolve) => {
+      setTimeout(() => resolve(''), 40000);
+    });
+
+    const text = await Promise.race([ocrPromise, timeoutPromise]);
+    return text || '';
+  } catch (err) {
+    console.warn('OCR error fallback:', err);
+    return '';
+  }
 }
 
 async function parseCsvFile(file: File): Promise<ParsedTransaction[]> {
@@ -246,6 +545,7 @@ async function parseCsvFile(file: File): Promise<ParsedTransaction[]> {
         currency: 'USD',
         date: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
         renewalDate: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
+        paymentSource: 'Primary Corporate Card •••• 4092',
         cadence: found?.cadence || 'monthly',
         category: found?.category || 'Software & Tools',
         confidence: found ? 94 : 75,
@@ -263,30 +563,229 @@ async function parseCsvFile(file: File): Promise<ParsedTransaction[]> {
   return candidates;
 }
 
-/**
- * Strict Final Total Amount and Currency Extraction from Invoice Text
- * Explicitly ignores taxes, subtotal, line items, and intermediate charges.
- */
+// =========================================================================
+// PAYMENT SOURCE ACCOUNT EXTRACTION ENGINE
+// =========================================================================
+
+export function extractPaymentSourceFromText(text: string, currency: Currency = 'USD'): string {
+  if (!text) return currency === 'INR' ? 'UPI AutoPay / Bank Mandate' : 'Primary Corporate Card •••• 4092';
+
+  // 1. Bank Name + Card Type + Last 4 Digits (e.g., "HDFC Bank Visa ending in 4090" or "SBI Credit Card •••• 2345")
+  const bankCardMatch = text.match(/\b(hdfc|sbi|icici|axis|kotak|pnb|citi|chase|bofa|barclays|hsbc)\b[^\r\n0-9]*\b(visa|mastercard|rupay|amex|credit|debit)\b[^\r\n0-9]*(\d{4})\b/i);
+  if (bankCardMatch) {
+    const bank = bankCardMatch[1].toUpperCase();
+    const brand = bankCardMatch[2].charAt(0).toUpperCase() + bankCardMatch[2].slice(1).toLowerCase();
+    const last4 = bankCardMatch[3];
+    return `${bank} ${brand} •••• ${last4}`;
+  }
+
+  // 2. Specific Card Brand + Last 4 (e.g. "Visa ending in 4092" or "Mastercard •••• 1234")
+  const cardBrandMatch = text.match(/\b(visa|mastercard|master\s*card|amex|american\s*express|rupay|discover|diners)\b[^\r\n0-9]*(\d{4})\b/i);
+  if (cardBrandMatch) {
+    const brand = cardBrandMatch[1].replace(/\s+/g, ' ').trim();
+    const cleanBrand = brand.charAt(0).toUpperCase() + brand.slice(1).toLowerCase();
+    const last4 = cardBrandMatch[2];
+    return `${cleanBrand} •••• ${last4}`;
+  }
+
+  // 3. Generic "Card ending in 4092" or "Credit Card ending in 4092"
+  const genericCardMatch = text.match(/(?:credit\s*card|debit\s*card|card|instrument|account|a\/c)\b[^\r\n0-9]*(?:ending\s*in|ending\s*with|ending|••|\*\*|\.\.|\s+)[^\r\n0-9]*(\d{4})\b/i);
+  if (genericCardMatch) {
+    return `Card •••• ${genericCardMatch[1]}`;
+  }
+
+  // 4. Standalone 4 digits preceded by asterisks/dots: e.g. "•••• 4090" or "**** 4090"
+  const dotCardMatch = text.match(/(?:••|\*\*|\.\.|\*{2,}|•{2,})\s*(\d{4})\b/);
+  if (dotCardMatch) {
+    return `Card •••• ${dotCardMatch[1]}`;
+  }
+
+  // 5. UPI / AutoPay Handles & Apps
+  const upiIdMatch = text.match(/\b([a-zA-Z0-9.\-_]{2,25}@(okhdfcbank|okaxis|oksbi|okicici|paytm|ybl|ibl|apl|axl|upi))\b/i);
+  if (upiIdMatch) {
+    return `UPI AutoPay (${upiIdMatch[1]})`;
+  }
+  if (/\b(?:google\s*pay|gpay)\b/i.test(text)) {
+    return 'UPI AutoPay (Google Pay)';
+  }
+  if (/\bphonepe\b/i.test(text)) {
+    return 'UPI AutoPay (PhonePe)';
+  }
+  if (/\bpaytm\b/i.test(text)) {
+    return 'UPI AutoPay (Paytm)';
+  }
+  if (/\b(?:upi\s*autopay|e-mandate|standing\s*instruction|nach\s*mandate|upi\s*mandate|upi)\b/i.test(text)) {
+    return 'UPI AutoPay / Bank Mandate';
+  }
+
+  // 6. Digital Wallets
+  if (/\bapple\s*pay\b/i.test(text)) return 'Apple Pay';
+  if (/\bpaypal\b/i.test(text)) return 'PayPal';
+
+  // 7. Bank Account without card
+  const bankAccMatch = text.match(/\b(hdfc|sbi|icici|axis|kotak|pnb)\b[^\r\n0-9]*(?:a\/c|account)[^\r\n0-9]*(\d{4})\b/i);
+  if (bankAccMatch) {
+    return `${bankAccMatch[1].toUpperCase()} Bank A/c •••• ${bankAccMatch[2]}`;
+  }
+
+  return currency === 'INR' ? 'UPI AutoPay / Bank Mandate' : 'Primary Corporate Card •••• 4092';
+}
+
+// =========================================================================
+// INTELLIGENT MERCHANT NAME & CATEGORY EXTRACTION
+// =========================================================================
+
+export function extractMerchantNameFromText(
+  text: string,
+  filename: string
+): { name: string; category: SubscriptionCategory; confidence: number } {
+  // 1. Check if matches any known merchants first
+  for (const m of KNOWN_MERCHANTS) {
+    if (m.patterns.some((p) => p.test(text) || p.test(filename))) {
+      return {
+        name: m.name,
+        category: m.category,
+        confidence: 96,
+      };
+    }
+  }
+
+  // 2. Explicit vendor / merchant labels in invoice text
+  const vendorRegexes = [
+    /(?:billed\s*by|sold\s*by|merchant\s*name|vendor\s*name|provider\s*name|company\s*name|seller\s*name|payable\s*to|remit\s*to|merchant|vendor|seller|service\s*provider|issuer)[:\s]+([^\r\n,;]+)/i,
+    /(?:receipt\s*from|invoice\s*from|order\s*from|payment\s*to|subscription\s*to|welcome\s*to)[:\s]+([^\r\n,;]+)/i,
+    /(?:thank\s*you\s*for\s*(?:your\s*)?(?:business\s*with|subscribing\s*to|payment\s*to))[:\s]+([^\r\n,;!.]+)/i,
+  ];
+
+  for (const reg of vendorRegexes) {
+    const match = text.match(reg);
+    if (match && match[1]) {
+      const candidate = cleanMerchantCandidate(match[1]);
+      if (candidate) {
+        return {
+          name: candidate,
+          category: detectCategoryFromText(text + ' ' + candidate),
+          confidence: 88,
+        };
+      }
+    }
+  }
+
+  // 3. Domain or Email heuristics (e.g. support@cursor.com or www.perplexity.ai)
+  const domainMatch = text.match(/(?:https?:\/\/)?(?:www\.)?([a-zA-Z0-9-]{3,25})\.(?:com|ai|io|net|in|org|co|app|dev)\b/i);
+  if (domainMatch && domainMatch[1] && !/^(?:google|apple|microsoft|stripe|razorpay|fastspring)$/i.test(domainMatch[1])) {
+    const rawDomain = domainMatch[1];
+    const name = rawDomain.charAt(0).toUpperCase() + rawDomain.slice(1);
+    return {
+      name,
+      category: detectCategoryFromText(text + ' ' + name),
+      confidence: 82,
+    };
+  }
+
+  // 4. Prominent header lines in first 5 lines of text
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 2);
+  for (const line of lines.slice(0, 5)) {
+    // Skip common document title words
+    if (/^(?:invoice|tax\s*invoice|bill|receipt|statement|original|duplicate|gstin|cin|date|bill\s*to|ship\s*to|customer|order)/i.test(line)) {
+      continue;
+    }
+    // Line has no numbers or dates and reasonable length
+    if (line.length >= 3 && line.length <= 35 && !/[0-9]{3,}/.test(line)) {
+      const candidate = cleanMerchantCandidate(line);
+      if (candidate) {
+        return {
+          name: candidate,
+          category: detectCategoryFromText(text + ' ' + candidate),
+          confidence: 78,
+        };
+      }
+    }
+  }
+
+  // 5. Filename clean candidate
+  const cleanFilename = filename
+    .replace(/\.[^/.]+$/, '')
+    .replace(/[_\-+]/g, ' ')
+    .replace(/statement|invoice|receipt|tax|bill|oct|nov|dec|jan|202[4-9]|pdf|png|jpg|jpeg/gi, '')
+    .trim();
+
+  if (cleanFilename.length >= 2) {
+    const formatted = cleanFilename
+      .split(/\s+/)
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(' ');
+    return {
+      name: formatted,
+      category: detectCategoryFromText(text + ' ' + formatted),
+      confidence: 72,
+    };
+  }
+
+  return {
+    name: 'Subscription Service',
+    category: 'Software & Tools',
+    confidence: 60,
+  };
+}
+
+function cleanMerchantCandidate(str: string): string | null {
+  const clean = str
+    .replace(/["'#*]+/g, '')
+    .replace(/\b(?:ltd|pvt|limited|inc|corp|corporation|llc|gmbh|co\.)\b\.?/gi, '')
+    .trim();
+  if (clean.length < 2 || clean.length > 40) return null;
+  // Ignore if it's purely digits or words like "Invoice Date", "Total", etc.
+  if (/^(?:date|total|amount|invoice|receipt|statement|tax|gstin|pan|order|subtotal|bill|usd|inr|eur|gbp)$/i.test(clean)) {
+    return null;
+  }
+  return clean.split(/\s+/).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}
+
+function detectCategoryFromText(text: string): SubscriptionCategory {
+  const lower = text.toLowerCase();
+  if (/netflix|spotify|disney|hotstar|hulu|prime\s*video|youtube|music|sound|movie|show|streaming|entertain/i.test(lower)) {
+    return 'Streaming & Ent';
+  }
+  if (/cloud|aws|amazon\s*web|azure|gcp|google\s*cloud|hosting|server|hostinger|godaddy|namecheap|vps|storage|telecom|broadband|wifi|jio|airtel/i.test(lower)) {
+    return 'Utilities & Cloud';
+  }
+  if (/ai|gpt|chatgpt|openai|claude|anthropic|perplexity|midjourney|copilot|model|llm|intelligence|anysphere/i.test(lower)) {
+    return 'Ai Assist';
+  }
+  if (/figma|canva|adobe|creative|photoshop|illustrator|design|ui|ux|vector|framer|webflow/i.test(lower)) {
+    return 'Design';
+  }
+  if (/slack|notion|zoom|microsoft|office|workspace|asana|jira|trello|linear|loom|calendar|grammarly|productivity/i.test(lower)) {
+    return 'Productivity';
+  }
+  if (/swiggy|zomato|blinkit|zepto|gym|fit|cult|health|food/i.test(lower)) {
+    return 'Other Misc';
+  }
+  return 'Software & Tools';
+}
+
+// =========================================================================
+// STRICT FINAL TOTAL AMOUNT & TRANSACTION EXTRACTOR
+// =========================================================================
+
 export function extractTransactionsFromText(
   text: string,
   filename: string,
   userPreferredCurrency: Currency = 'USD'
 ): ParsedTransaction[] {
-  // 1. Detect Currency from text symbols, keywords, or filename
+  // 1. First scan for explicit currency symbols attached to amounts or totals
   let detectedCurrency: Currency = userPreferredCurrency;
-  const indianCurrencyRegex = /₹|rs\.?|inr|rupee|rupees|gstin|upi|paytm|phonepe|gpay|bharatpe|razorpay|billdesk|hdfc|icici|sbi|axis|kotak|pnb|airtel|jio|swiggy|zomato|hotstar|netbanking|\/-|\bpaise\b/i;
+  let explicitSymbolCurrency: Currency | null = null;
 
-  if (indianCurrencyRegex.test(text) || /inr|rupee|rs/i.test(filename)) {
-    detectedCurrency = 'INR';
-  } else if (/€|eur|euro/i.test(text) || /eur/i.test(filename)) {
-    detectedCurrency = 'EUR';
-  } else if (/£|gbp|pound/i.test(text) || /gbp/i.test(filename)) {
-    detectedCurrency = 'GBP';
-  } else if (/\$|usd|dollar/i.test(text) || /usd/i.test(filename)) {
-    detectedCurrency = 'USD';
-  } else {
-    detectedCurrency = userPreferredCurrency;
-  }
+  // Check if explicit currency symbols ($ or USD, € or EUR, £ or GBP, ₹ or INR) are present
+  const hasDollar = /\$|\busd\b|\bdollar/i.test(text) || /\busd\b/i.test(filename);
+  const hasEuro = /€|\beur\b|\beuro\b/i.test(text) || /\beur\b/i.test(filename);
+  const hasPound = /£|\bgbp\b|\bpound\b/i.test(text) || /\bgbp\b/i.test(filename);
+  const hasRupee = /₹|\brs\.?\b|\binr\b|\brupee/i.test(text) || /\binr\b|\brs\b/i.test(filename);
+
+  // General Indian banking/services regex
+  const indianKeywordsRegex = /\bgstin\b|\bupi\b|\bpaytm\b|\bphonepe\b|\bgpay\b|\bbharatpe\b|\brazorpay\b|\bbilldesk\b|\bhdfc\b|\bicici\b|\bsbi\b|\baxis\b|\bkotak\b|\bpnb\b|\bairtel\b|\bjio\b|\bswiggy\b|\bzomato\b|\bhotstar\b|\bnetbanking\b|\/-\b|\bpaise\b/i;
 
   // 2. Strict Final Total Amount Extraction
   // We ONLY extract the final total amount. Intermediate charges like tax, subtotal, discount, fee are excluded.
@@ -294,13 +793,13 @@ export function extractTransactionsFromText(
   let finalTotalAmount = 0;
 
   // Regex specifically targeting final total labels
-  const finalTotalRegex = /(?:grand\s*total|total\s*amount\s*(?:due|paid|charged|payable)?|total\s*payable|net\s*payable|amount\s*due|final\s*total|invoice\s*total|total\s*[:=]|total\s+amt|total|paid|amount)[:\s]*([₹$€£]|inr|usd|eur|gbp|rs\.?)?\s*([0-9]{1,3}(?:,[0-9]{2,3})*(?:\.[0-9]{1,2})?|[0-9]{2,6})/i;
+  const finalTotalRegex = /(?:grand\s*total|total\s*amount\s*(?:due|paid|charged|payable)?|total\s*payable|net\s*payable|amount\s*paid|amount\s*due|final\s*total|invoice\s*total|total\s*charged|total\s*billed|total\s*[:=]|total\s+amt|total|paid|amount)[:\s]*([₹$€£]|inr|usd|eur|gbp|rs\.?)?\s*([0-9]{1,3}(?:,[0-9]{2,3})*(?:\.[0-9]{1,2})?|[0-9]{2,6})/i;
 
   // Pass 1: Scan line by line for an explicit Final Total line, skipping lines that contain "subtotal" or "tax"
   for (const line of lines) {
     const trimmed = line.trim();
     // Skip intermediate lines (Subtotal, GST, Tax, Discount)
-    if (/subtotal|sub-total|sub\s+total|discount|tax\b|gst\b|vat\b|cgst|sgst|fee\b|convenience/i.test(trimmed)) {
+    if (/subtotal|sub-total|sub\s+total|discount|tax\b|gst\b|vat\b|cgst|sgst|fee\b|convenience|balance\s*due/i.test(trimmed)) {
       continue;
     }
     const match = trimmed.match(finalTotalRegex);
@@ -308,6 +807,21 @@ export function extractTransactionsFromText(
       const val = parseFloat(match[2].replace(/,/g, ''));
       if (val && !isNaN(val) && val > 0 && !(val >= 2020 && val <= 2030 && Number.isInteger(val))) {
         finalTotalAmount = val;
+        if (match[1]) {
+          const sym = match[1].toLowerCase();
+          if (sym === '$' || sym === 'usd') explicitSymbolCurrency = 'USD';
+          else if (sym === '€' || sym === 'eur') explicitSymbolCurrency = 'EUR';
+          else if (sym === '£' || sym === 'gbp') explicitSymbolCurrency = 'GBP';
+          else if (sym === '₹' || sym.includes('rs') || sym === 'inr') explicitSymbolCurrency = 'INR';
+        } else if (trimmed.includes('$')) {
+          explicitSymbolCurrency = 'USD';
+        } else if (trimmed.includes('€')) {
+          explicitSymbolCurrency = 'EUR';
+        } else if (trimmed.includes('£')) {
+          explicitSymbolCurrency = 'GBP';
+        } else if (trimmed.includes('₹')) {
+          explicitSymbolCurrency = 'INR';
+        }
         break;
       }
     }
@@ -315,18 +829,49 @@ export function extractTransactionsFromText(
 
   // Pass 2: If no strict line matched, check with regex over full text ignoring subtotal
   if (!finalTotalAmount) {
-    const fallbackRegex = /(?:grand\s*total|total\s*amount(?:\s*due|\s*paid|\s*charged|\s*payable)?|total\s*payable|net\s*payable|amount\s*due|final\s*amount|total\s*[:=]|total\b)[:\s]*([₹$€£]|inr|usd|eur|gbp|rs\.?)?\s*([0-9]{1,3}(?:,[0-9]{2,3})*(?:\.[0-9]{1,2})?|[0-9]{2,6})/gi;
+    const fallbackRegex = /(?:grand\s*total|total\s*amount(?:\s*due|\s*paid|\s*charged|\s*payable)?|total\s*payable|net\s*payable|amount\s*paid|amount\s*due|final\s*amount|total\s*[:=]|total\b)[:\s]*([₹$€£]|inr|usd|eur|gbp|rs\.?)?\s*([0-9]{1,3}(?:,[0-9]{2,3})*(?:\.[0-9]{1,2})?|[0-9]{2,6})/gi;
     let m: RegExpExecArray | null;
     while ((m = fallbackRegex.exec(text)) !== null) {
-      // Check if preceded by "sub"
       const prefix = text.slice(Math.max(0, m.index - 10), m.index).toLowerCase();
-      if (prefix.includes('sub')) continue;
+      if (prefix.includes('sub') || prefix.includes('tax')) continue;
 
       const val = parseFloat(m[2].replace(/,/g, ''));
-      if (val && !isNaN(val) && !(val >= 2020 && val <= 2030 && Number.isInteger(val))) {
+      if (val && !isNaN(val) && val > 0 && !(val >= 2020 && val <= 2030 && Number.isInteger(val))) {
         finalTotalAmount = val;
+        if (m[1]) {
+          const sym = m[1].toLowerCase();
+          if (sym === '$' || sym === 'usd') explicitSymbolCurrency = 'USD';
+          else if (sym === '€' || sym === 'eur') explicitSymbolCurrency = 'EUR';
+          else if (sym === '£' || sym === 'gbp') explicitSymbolCurrency = 'GBP';
+          else if (sym === '₹' || sym.includes('rs') || sym === 'inr') explicitSymbolCurrency = 'INR';
+        }
       }
     }
+  }
+
+  // Resolve currency priority:
+  // 1. Explicit symbol on the total line
+  // 2. Explicit symbols in the document
+  // 3. Indian keywords (if no foreign currency symbol was explicitly found)
+  // 4. Default to user's preferred currency
+  if (explicitSymbolCurrency) {
+    detectedCurrency = explicitSymbolCurrency;
+  } else if (hasDollar && !hasRupee) {
+    detectedCurrency = 'USD';
+  } else if (hasEuro && !hasRupee) {
+    detectedCurrency = 'EUR';
+  } else if (hasPound && !hasRupee) {
+    detectedCurrency = 'GBP';
+  } else if (hasRupee || indianKeywordsRegex.test(text) || /inr|rupee|rs/i.test(filename)) {
+    detectedCurrency = 'INR';
+  } else if (hasDollar) {
+    detectedCurrency = 'USD';
+  } else if (hasEuro) {
+    detectedCurrency = 'EUR';
+  } else if (hasPound) {
+    detectedCurrency = 'GBP';
+  } else {
+    detectedCurrency = userPreferredCurrency;
   }
 
   // Pass 3: Check filename for amount (e.g. "Invoice_649_INR.pdf" or "bill_1499.png")
@@ -365,46 +910,39 @@ export function extractTransactionsFromText(
   // 4. Extract Renewal / Next Billing Date from Invoice Text
   const foundRenewalDate = extractRenewalDateFromText(text, detectedCadence, detectedCurrency === 'INR');
 
-  // 5. Identify Merchant
+  // 5. Extract Payment Source Account
+  const paymentSource = extractPaymentSourceFromText(text, detectedCurrency);
+
+  // 6. Identify Merchant
   const candidates: ParsedTransaction[] = [];
 
   for (const m of KNOWN_MERCHANTS) {
     const hasMatch = m.patterns.some((p) => p.test(text) || p.test(filename));
     if (hasMatch) {
-      const amt = finalTotalAmount > 0 ? finalTotalAmount : m.defaultAmounts[detectedCurrency];
+      const amt = finalTotalAmount > 0 ? finalTotalAmount : m.defaultAmounts[detectedCurrency] || 19.99;
       candidates.push({
         merchantName: m.name,
-        rawString: m.name.split(' ')[0].toUpperCase() + '*ONLINE_SUBSCRIPTION',
+        rawString: `${m.name.toUpperCase().replace(/\s+/g, '_')}*RECURRING_COMMITMENT`,
         amount: amt,
         currency: detectedCurrency,
         date: foundRenewalDate,
         renewalDate: foundRenewalDate,
+        paymentSource: paymentSource,
         cadence: m.cadence || detectedCadence,
         category: m.category,
         confidence: finalTotalAmount > 0 ? 96 : 85,
         isDuplicate: m.name.toLowerCase().includes('netflix'),
         duplicateMerchant: m.name.toLowerCase().includes('netflix') ? 'Netflix 4K Tier' : undefined,
         isRecurring: true,
-        // ONLY the final total amount in detectedAmounts as requested by user
         detectedAmounts: [amt],
         ocrSnippet: text.slice(0, 180),
       });
     }
   }
 
-  // 6. If no known merchant identified, construct candidate from invoice details
+  // 7. If no known merchant identified, dynamically extract merchant from invoice text
   if (candidates.length === 0) {
-    const cleanName = filename
-      .replace(/\.[^/.]+$/, '')
-      .replace(/[_\-+]/g, ' ')
-      .replace(/statement|invoice|receipt|oct|2026|bill|pdf|png|jpg|jpeg/gi, '')
-      .trim();
-
-    const merchant =
-      cleanName.length > 2
-        ? cleanName.charAt(0).toUpperCase() + cleanName.slice(1)
-        : 'FastSpring*Software';
-
+    const extractedMerchant = extractMerchantNameFromText(text, filename);
     const amt =
       finalTotalAmount > 0
         ? finalTotalAmount
@@ -417,18 +955,18 @@ export function extractTransactionsFromText(
         : 29.00;
 
     candidates.push({
-      merchantName: merchant,
-      rawString: `FS*${merchant.toUpperCase().replace(/\s+/g, '_')}.NET`,
+      merchantName: extractedMerchant.name,
+      rawString: `${extractedMerchant.name.toUpperCase().replace(/\s+/g, '_')}*INVOICE_BILLING`,
       amount: amt,
       currency: detectedCurrency,
       date: foundRenewalDate,
       renewalDate: foundRenewalDate,
+      paymentSource: paymentSource,
       cadence: detectedCadence,
-      category: 'Software & Tools',
-      confidence: finalTotalAmount > 0 ? 92 : 72,
+      category: extractedMerchant.category,
+      confidence: finalTotalAmount > 0 ? extractedMerchant.confidence : 70,
       isDuplicate: false,
       isRecurring: true,
-      // ONLY the final total amount in detectedAmounts
       detectedAmounts: [amt],
       ocrSnippet: text.slice(0, 180),
     });
@@ -465,9 +1003,6 @@ function formatIso(year: number, month: number, day: number): string | null {
   return `${year}-${mm}-${dd}`;
 }
 
-/**
- * Pure integer date advancing without timezone/UTC conversion offset bugs
- */
 export function advanceDateString(isoDate: string, cadence: 'monthly' | 'yearly'): string {
   const parts = isoDate.split('-');
   let year = parseInt(parts[0], 10);
@@ -488,9 +1023,6 @@ export function advanceDateString(isoDate: string, cadence: 'monthly' | 'yearly'
   return formatIso(year, month, day) || isoDate;
 }
 
-/**
- * Parses multiple standard date patterns into standard ISO `YYYY-MM-DD`
- */
 export function parseAnyDateString(raw: string, preferDmy = false): string | null {
   if (!raw) return null;
   const clean = raw.trim().replace(/^(?:on|at|date|[:\s-])+/i, '').trim();
@@ -527,10 +1059,8 @@ export function parseAnyDateString(raw: string, preferDmy = false): string | nul
     const yr = parseInt(numMatch[3], 10);
 
     if (first > 12) {
-      // Must be DD/MM/YYYY
       return formatIso(yr, second, first);
     } else if (second > 12) {
-      // Must be MM/DD/YYYY
       return formatIso(yr, first, second);
     } else if (preferDmy) {
       return formatIso(yr, second, first);
@@ -542,10 +1072,6 @@ export function parseAnyDateString(raw: string, preferDmy = false): string | nul
   return null;
 }
 
-/**
- * Extracts the exact subscription Renewal / Next Billing / Due Date from document text.
- * Prioritizes explicit renewal phrases, then service period ends, then forward-projects invoice dates.
- */
 export function extractRenewalDateFromText(
   text: string,
   cadence: 'monthly' | 'yearly' = 'monthly',
@@ -567,7 +1093,7 @@ export function extractRenewalDateFromText(
     }
   }
 
-  // 2. Billing Period range: e.g. "Billing Period: Oct 10, 2026 - Nov 10, 2026" or "2026-10-01 to 2026-10-31"
+  // 2. Billing Period range: e.g. "Billing Period: Oct 10, 2026 - Nov 10, 2026"
   const periodMatch = text.match(/(?:billing\s*period|service\s*period|coverage\s*period|period|dates\s*of\s*service)[:\s]*([^\r\n]+)/i);
   if (periodMatch && periodMatch[1]) {
     const line = periodMatch[1];
@@ -579,7 +1105,7 @@ export function extractRenewalDateFromText(
     }
   }
 
-  // 3. Fallback: Invoice Date / Issue Date + 1 Cadence (e.g. Oct 15, 2026 monthly invoice renews Nov 15, 2026)
+  // 3. Fallback: Invoice Date / Issue Date + 1 Cadence
   const invoiceDateMatch = text.match(/(?:invoice\s*date|bill\s*date|date\s*of\s*issue|issue\s*date|billing\s*date|statement\s*date|transaction\s*date)[:\s]*([^\r\n;]+)/i);
   if (invoiceDateMatch && invoiceDateMatch[1]) {
     const parsedInvoiceDate = parseAnyDateString(invoiceDateMatch[1], preferDmy);

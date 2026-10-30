@@ -184,6 +184,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           password,
           options: {
             data: { full_name: displayName || email.split('@')[0] },
+            emailRedirectTo: `${window.location.origin}/overview`,
           },
         });
         if (error) return { error };
