@@ -984,4 +984,140 @@ export const db = {
     saveToStorage('notification_prefs', updated);
     return updated;
   },
+
+  // --- Document & Invoice Storage ---
+  async uploadInvoiceFile(file: File, userId: string): Promise<{ storagePath: string; error?: string }> {
+    const sanitizedName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const filePath = `${userId}/${Date.now()}_${sanitizedName}`;
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase.storage.from('invoices').upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false,
+        });
+        if (error) {
+          console.warn('Supabase invoice upload warning:', error.message);
+          return { storagePath: filePath, error: error.message };
+        }
+        return { storagePath: data?.path || filePath };
+      } catch (err: any) {
+        console.warn('Storage upload network fallback:', err.message);
+        return { storagePath: filePath, error: err.message };
+      }
+    }
+
+    return { storagePath: filePath };
+  },
+
+  async createDocumentRecord(doc: Omit<DocumentRecord, 'id' | 'created_at' | 'updated_at'>): Promise<DocumentRecord> {
+    const now = new Date().toISOString();
+    const newDoc: DocumentRecord = {
+      ...doc,
+      id: 'doc-' + Date.now(),
+      created_at: now,
+      updated_at: now,
+    };
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('documents')
+          .insert([doc])
+          .select()
+          .single();
+        if (!error && data) return data as DocumentRecord;
+      } catch (err) {
+        console.warn('Supabase document insert fallback:', err);
+      }
+    }
+
+    const list = getFromStorage<DocumentRecord[]>('documents', []);
+    list.unshift(newDoc);
+    saveToStorage('documents', list);
+    return newDoc;
+  },
+
+  async getDocuments(userId: string): Promise<DocumentRecord[]> {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('documents')
+          .select('*')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false });
+        if (!error && data) return data as DocumentRecord[];
+      } catch (err) {
+        console.warn('Supabase getDocuments fallback:', err);
+      }
+    }
+    const all = getFromStorage<DocumentRecord[]>('documents', []);
+    return all.filter(d => d.user_id === userId || (userId === 'default-user' || userId === 'demo-user-123' ? d.user_id === 'default-user' : false));
+  },
+
+  // --- Extracted Transactions ---
+  async createExtractedTransaction(tx: Omit<ExtractedTransaction, 'id' | 'created_at'>): Promise<ExtractedTransaction> {
+    const now = new Date().toISOString();
+    const newTx: ExtractedTransaction = {
+      ...tx,
+      id: 'tx-' + Date.now(),
+      created_at: now,
+    };
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('extracted_transactions')
+          .insert([tx])
+          .select()
+          .single();
+        if (!error && data) return data as ExtractedTransaction;
+      } catch (err) {
+        console.warn('Supabase extracted transaction insert fallback:', err);
+      }
+    }
+
+    const list = getFromStorage<ExtractedTransaction[]>('extracted_transactions', []);
+    list.unshift(newTx);
+    saveToStorage('extracted_transactions', list);
+    return newTx;
+  },
+
+  async getExtractedTransactions(documentId: string): Promise<ExtractedTransaction[]> {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('extracted_transactions')
+          .select('*')
+          .eq('document_id', documentId);
+        if (!error && data) return data as ExtractedTransaction[];
+      } catch (err) {
+        console.warn('Supabase getExtractedTransactions fallback:', err);
+      }
+    }
+    const all = getFromStorage<ExtractedTransaction[]>('extracted_transactions', []);
+    return all.filter(t => t.document_id === documentId);
+  },
+
+  async updateExtractedTransaction(id: string, updates: Partial<ExtractedTransaction>): Promise<ExtractedTransaction | null> {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('extracted_transactions')
+          .update(updates)
+          .eq('id', id)
+          .select()
+          .single();
+        if (!error && data) return data as ExtractedTransaction;
+      } catch (err) {
+        console.warn('Supabase updateExtractedTransaction fallback:', err);
+      }
+    }
+    const list = getFromStorage<ExtractedTransaction[]>('extracted_transactions', []);
+    const idx = list.findIndex(t => t.id === id);
+    if (idx === -1) return null;
+    list[idx] = { ...list[idx], ...updates };
+    saveToStorage('extracted_transactions', list);
+    return list[idx];
+  },
 };

@@ -304,7 +304,7 @@ export const AddSubscriptionPage: React.FC = () => {
           setFormCategory(primaryCand.category);
           setFormCadence(primaryCand.cadence === 'yearly' ? 'yearly' : 'monthly');
           setFormRenewalDate(primaryCand.renewalDate || primaryCand.date);
-          setFormPaymentSourceId(primaryCand.paymentSource || (prefCur === 'INR' ? 'UPI AutoPay / Bank Mandate' : 'Primary Corporate Card •••• 4092'));
+          setFormPaymentSourceId(primaryCand.paymentSource || '');
           setFormUnconfirmedEstimate(primaryCand.confidence < 80);
         }
       } else {
@@ -433,13 +433,41 @@ export const AddSubscriptionPage: React.FC = () => {
     const intervalUnit: BillingIntervalUnit = formCadence === 'yearly' ? 'years' : 'months';
     const numAmount = parseFloat(formAmount) || 0;
 
-    const modeLabel = formPaymentSourceId.trim() || (formCurrency === 'INR' || userPreferredCurrency === 'INR' ? 'UPI AutoPay (Google Pay / PhonePe)' : 'Corporate Card •••• 4092');
-    const isUpi = modeLabel.toLowerCase().includes('upi') || modeLabel.toLowerCase().includes('phonepe') || modeLabel.toLowerCase().includes('gpay');
-    const isCard = modeLabel.toLowerCase().includes('card') || modeLabel.toLowerCase().includes('visa') || modeLabel.toLowerCase().includes('mastercard') || modeLabel.toLowerCase().includes('••••');
-    const modeBadge = isUpi ? 'UPI AutoPay: Active' : isCard ? 'Card Auto-Debit: Active' : 'AutoPay: Active';
+    const rawMode = formPaymentSourceId.trim();
+    let modeLabel = rawMode;
+    let modeBadge = 'Not available in invoice';
 
+    if (rawMode) {
+      const isUpi = rawMode.toLowerCase().includes('upi') || rawMode.toLowerCase().includes('phonepe') || rawMode.toLowerCase().includes('gpay');
+      const isCard = rawMode.toLowerCase().includes('card') || rawMode.toLowerCase().includes('visa') || rawMode.toLowerCase().includes('mastercard') || rawMode.toLowerCase().includes('••••');
+      modeLabel = rawMode;
+      modeBadge = isUpi ? 'UPI AutoPay: Active' : isCard ? 'Card Auto-Debit: Active' : 'AutoPay: Active';
+    } else {
+      modeLabel = 'Not available in invoice';
+      modeBadge = 'Not available in invoice';
+    }
+
+    const userId = user?.id || 'default-user';
+    let documentId = 'doc-' + Date.now();
+
+    // 1. Upload to Supabase Storage & Create Document Record
+    if (file) {
+      const uploadRes = await db.uploadInvoiceFile(file, userId);
+      const docRecord = await db.createDocumentRecord({
+        user_id: userId,
+        storage_path: uploadRes.storagePath,
+        original_filename: file.name,
+        mime_type: file.type || 'application/pdf',
+        file_size: file.size,
+        processing_status: 'completed',
+        raw_ocr_data: activeCandidate?.extractionResult || null,
+      });
+      documentId = docRecord.id;
+    }
+
+    // 2. Create Verified Subscription
     const created = await db.createSubscription({
-      user_id: user?.id || 'default-user',
+      user_id: userId,
       merchant_name: formMerchantName,
       category: formCategory,
       amount: numAmount,
@@ -454,11 +482,32 @@ export const AddSubscriptionPage: React.FC = () => {
       notes: activeCandidate ? `Extracted via: ${activeCandidate.rawString}` : 'Statement extraction',
     });
 
+    // 3. Create Extracted Transaction Record linked to document and subscription
+    if (file) {
+      await db.createExtractedTransaction({
+        user_id: userId,
+        document_id: documentId,
+        merchant_name: formMerchantName,
+        transaction_description: activeCandidate?.rawString || `${formMerchantName} subscription`,
+        amount: numAmount,
+        currency: formCurrency,
+        transaction_date: activeCandidate?.date || formRenewalDate || new Date().toISOString().split('T')[0],
+        suggested_cadence: formCadence,
+        suggested_category: formCategory,
+        confidence_score: activeCandidate?.confidence ? activeCandidate.confidence / 100 : 0.85,
+        possible_duplicate: Boolean(activeCandidate?.isDuplicate),
+        matched_subscription_id: created.id,
+        is_recurring_candidate: true,
+        review_status: 'confirmed',
+      });
+    }
+
+    // 4. Create Reminder
     if (created && formRenewalDate) {
       const reminderTime = new Date(formRenewalDate);
       reminderTime.setDate(reminderTime.getDate() - 2);
       await db.createReminder({
-        user_id: user?.id || 'default-user',
+        user_id: userId,
         subscription_id: created.id,
         scheduled_at: reminderTime.toISOString(),
         reminder_type: 'renewal_notice',
@@ -1079,9 +1128,13 @@ export const AddSubscriptionPage: React.FC = () => {
                   </label>
                   {formPaymentSourceId ? (
                     <span className="px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold border border-emerald-200 dark:border-emerald-800">
-                      Matched Statement
+                      Matched in Document
                     </span>
-                  ) : null}
+                  ) : (
+                    <span className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-bold border border-slate-200 dark:border-slate-700">
+                      Not available in invoice
+                    </span>
+                  )}
                 </div>
                 <div className="relative">
                   <CreditCard className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-blue-600 dark:text-blue-400" />
@@ -1089,11 +1142,62 @@ export const AddSubscriptionPage: React.FC = () => {
                     type="text"
                     value={formPaymentSourceId}
                     onChange={(e) => setFormPaymentSourceId(e.target.value)}
-                    placeholder={userPreferredCurrency === 'INR' ? 'e.g. HDFC Visa •••• 4090 or UPI AutoPay' : 'e.g. Corporate Card •••• 4092'}
+                    placeholder="Not available in invoice — you may optionally link one"
                     className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[#2446D8]"
                   />
                 </div>
               </div>
+
+              {/* Invoice Evidence & Metadata Breakdown (Step 7 & 8) */}
+              {activeCandidate?.extractionResult && (
+                <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2 text-[11px]">
+                  <div className="font-bold text-slate-800 dark:text-slate-200 flex items-center justify-between">
+                    <span>Document Evidence & Traceability</span>
+                    <span className="text-emerald-600 dark:text-emerald-400 font-bold">
+                      {activeCandidate.extractionResult.merchantName.value} (Page {activeCandidate.extractionResult.merchantName.page})
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-slate-600 dark:text-slate-300">
+                    <div>
+                      <span className="text-slate-400 dark:text-slate-500 block">Invoice Number:</span>
+                      <span className="font-semibold text-slate-800 dark:text-slate-200">
+                        {activeCandidate.extractionResult.invoiceNumber.value || 'Not specified'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 dark:text-slate-500 block">Subtotal:</span>
+                      <span className="font-semibold text-slate-800 dark:text-slate-200">
+                        {activeCandidate.extractionResult.subtotal.value
+                          ? `${formCurrency} ${activeCandidate.extractionResult.subtotal.value}`
+                          : 'Not separated'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 dark:text-slate-500 block">Payment Rails:</span>
+                      <span className="font-semibold text-slate-800 dark:text-slate-200">
+                        {activeCandidate.extractionResult.paymentMethod.value || 'Not available in invoice'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 dark:text-slate-500 block">Verified Grand Total:</span>
+                      <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                        {formCurrency} {activeCandidate.extractionResult.totalAmount.value || formAmount}
+                      </span>
+                    </div>
+                  </div>
+
+                  {activeCandidate.extractionResult.warnings.length > 0 && (
+                    <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700 space-y-1">
+                      {activeCandidate.extractionResult.warnings.map((warn, wIdx) => (
+                        <p key={wIdx} className="text-amber-700 dark:text-amber-400 text-[10px] flex items-center gap-1.5">
+                          <span>⚠</span>
+                          <span>{warn}</span>
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Cancellation Protocol Status */}
               <div className="pt-2">

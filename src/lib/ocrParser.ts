@@ -1,5 +1,6 @@
 import { createWorker } from 'tesseract.js';
 import { SubscriptionCategory, Currency } from '../types';
+import { processInvoiceDocument, InvoiceExtractionResult, sanitizePdfExtractedText } from './invoiceExtractor';
 
 export interface ParsedTransaction {
   merchantName: string;
@@ -18,6 +19,11 @@ export interface ParsedTransaction {
   notes?: string;
   detectedAmounts?: number[];
   ocrSnippet?: string;
+  invoiceNumber?: string;
+  subtotal?: number;
+  taxAmount?: number;
+  paymentMethodConfidence?: number;
+  extractionResult?: InvoiceExtractionResult;
 }
 
 // Exchange rates for live currency switching
@@ -138,6 +144,19 @@ export const KNOWN_MERCHANTS: {
     defaultAmounts: { USD: 10.00, INR: 865, EUR: 9.20, GBP: 7.90 },
   },
 
+  // Professional & Career
+  {
+    patterns: [
+      /\blinkedin\b/i,
+      /\blinkedin\.com\b/i,
+      /\blinkedin\s*(?:ireland|corporation|premium|learning|recruiter|sales\s*navigator)\b/i,
+    ],
+    name: 'LinkedIn Premium',
+    category: 'Software & Tools',
+    cadence: 'monthly',
+    defaultAmounts: { USD: 39.99, INR: 1499, EUR: 34.99, GBP: 29.99 },
+  },
+
   // Design & Creative
   {
     patterns: [/figma/i],
@@ -147,7 +166,14 @@ export const KNOWN_MERCHANTS: {
     defaultAmounts: { USD: 15.00, INR: 1299, EUR: 14.00, GBP: 12.00 },
   },
   {
-    patterns: [/adobe/i, /creative\s*cloud/i, /after\s*effects/i, /photoshop/i, /illustrator/i],
+    patterns: [
+      /\badobe\s*(?:systems|inc\.?|creative\s*cloud|systems\s*software|acrobat|photoshop|illustrator)\b/i,
+      /\bcreative\s*cloud\s*(?:all\s*apps|photography|single\s*app)\b/i,
+      /\bbilled\s*by\s*adobe\b/i,
+      /\bpayment\s*to\s*adobe\b/i,
+      /\bwww\.adobe\.com\b/i,
+      /\badobe\.com\b/i,
+    ],
     name: 'Adobe Creative Cloud',
     category: 'Design',
     cadence: 'monthly',
@@ -354,34 +380,52 @@ export async function parseDocument(
   onProgress?: (msg: string) => void,
   userPreferredCurrency: Currency = 'USD'
 ): Promise<ParsedTransaction[]> {
-  const isImage = file.type.startsWith('image/');
   const isCsv = file.name.endsWith('.csv') || file.type === 'text/csv';
-  const isPdf = file.name.endsWith('.pdf') || file.type === 'application/pdf';
 
   if (isCsv) {
     if (onProgress) onProgress('Parsing CSV statement records...');
     return parseCsvFile(file);
   }
 
-  let extractedText = '';
+  // Use the advanced, production-grade document extraction engine
+  const extraction = await processInvoiceDocument(file, onProgress, userPreferredCurrency);
 
-  if (isPdf) {
-    if (onProgress) onProgress('Thoroughly scanning PDF document streams & metadata...');
-    extractedText = await extractTextFromPdf(file);
-  } else if (isImage) {
-    if (onProgress) onProgress('Scanning invoice / receipt image with OCR...');
-    extractedText = await extractTextFromImage(file, onProgress);
-  } else {
-    // Text or plain file
-    if (onProgress) onProgress('Reading statement contents...');
-    extractedText = await readFileAsText(file).catch(() => '');
-  }
+  const merchant = extraction.merchantName.value || 'Subscription Service';
+  const amount = extraction.totalAmount.value || 0;
+  const currency = extraction.currency.value || userPreferredCurrency;
+  const renewalDate = extraction.renewalDate.value || extraction.invoiceDate.value || new Date().toISOString().split('T')[0];
+  const date = extraction.invoiceDate.value || new Date().toISOString().split('T')[0];
+  const paymentSource = extraction.paymentMethod.value || undefined;
+  const cadence = extraction.billingFrequency.value === 'yearly' ? 'yearly' : 'monthly';
+  const confidence = Math.round(
+    ((extraction.merchantName.confidence || 0) + (extraction.totalAmount.confidence || 0)) / 2
+  );
 
-  // Combine OCR/PDF text with file name for complete coverage
-  const combinedText = (extractedText + '\n' + file.name).trim();
-  if (onProgress) onProgress('Extracting merchant, charge amount, renewal date & payment source...');
+  const primaryTx: ParsedTransaction = {
+    merchantName: merchant,
+    rawString: `${merchant.toUpperCase().replace(/\s+/g, '_')}*INVOICE_${extraction.invoiceNumber.value || 'VERIFIED'}`,
+    amount,
+    currency,
+    date,
+    renewalDate,
+    paymentSource,
+    cadence,
+    category: extraction.serviceName.value ? detectCategoryFromText(extraction.serviceName.value + ' ' + merchant) : 'Software & Tools',
+    confidence: confidence > 0 ? confidence : 75,
+    isDuplicate: merchant.toLowerCase().includes('netflix'),
+    duplicateMerchant: merchant.toLowerCase().includes('netflix') ? 'Netflix 4K Tier' : undefined,
+    isRecurring: true,
+    notes: extraction.warnings.length > 0 ? extraction.warnings.join('; ') : 'Document parsed via verified OCR/text extraction',
+    detectedAmounts: extraction.detectedAmounts,
+    ocrSnippet: extraction.rawText ? extraction.rawText.slice(0, 180) : file.name,
+    invoiceNumber: extraction.invoiceNumber.value || undefined,
+    subtotal: extraction.subtotal.value || undefined,
+    taxAmount: extraction.taxAmount.value || undefined,
+    paymentMethodConfidence: extraction.paymentMethod.confidence,
+    extractionResult: extraction,
+  };
 
-  return extractTransactionsFromText(combinedText, file.name, userPreferredCurrency);
+  return [primaryTx];
 }
 
 function readFileAsText(file: File): Promise<string> {
@@ -568,7 +612,7 @@ async function parseCsvFile(file: File): Promise<ParsedTransaction[]> {
 // =========================================================================
 
 export function extractPaymentSourceFromText(text: string, currency: Currency = 'USD'): string {
-  if (!text) return currency === 'INR' ? 'UPI AutoPay / Bank Mandate' : 'Primary Corporate Card •••• 4092';
+  if (!text) return '';
 
   // 1. Bank Name + Card Type + Last 4 Digits (e.g., "HDFC Bank Visa ending in 4090" or "SBI Credit Card •••• 2345")
   const bankCardMatch = text.match(/\b(hdfc|sbi|icici|axis|kotak|pnb|citi|chase|bofa|barclays|hsbc)\b[^\r\n0-9]*\b(visa|mastercard|rupay|amex|credit|debit)\b[^\r\n0-9]*(\d{4})\b/i);
@@ -628,7 +672,8 @@ export function extractPaymentSourceFromText(text: string, currency: Currency = 
     return `${bankAccMatch[1].toUpperCase()} Bank A/c •••• ${bankAccMatch[2]}`;
   }
 
-  return currency === 'INR' ? 'UPI AutoPay / Bank Mandate' : 'Primary Corporate Card •••• 4092';
+  // NO PAYMENT METHOD FOUND: Return empty string. Never invent or assume!
+  return '';
 }
 
 // =========================================================================
@@ -927,7 +972,7 @@ export function extractTransactionsFromText(
         currency: detectedCurrency,
         date: foundRenewalDate,
         renewalDate: foundRenewalDate,
-        paymentSource: paymentSource,
+        paymentSource: paymentSource || undefined,
         cadence: m.cadence || detectedCadence,
         category: m.category,
         confidence: finalTotalAmount > 0 ? 96 : 85,
@@ -961,7 +1006,7 @@ export function extractTransactionsFromText(
       currency: detectedCurrency,
       date: foundRenewalDate,
       renewalDate: foundRenewalDate,
-      paymentSource: paymentSource,
+      paymentSource: paymentSource || undefined,
       cadence: detectedCadence,
       category: extractedMerchant.category,
       confidence: finalTotalAmount > 0 ? extractedMerchant.confidence : 70,

@@ -152,7 +152,7 @@ export const AddUploadInvoice: React.FC = () => {
           isDuplicate: false,
           isRecurring: true,
           selected: true,
-          paymentSource: prefCur === 'INR' ? 'UPI AutoPay / Bank Mandate' : 'Primary Corporate Card •••• 4092',
+          paymentSource: undefined,
         };
         setCandidates([fallback]);
         setSelectedCandidate(fallback);
@@ -175,7 +175,7 @@ export const AddUploadInvoice: React.FC = () => {
         isDuplicate: false,
         isRecurring: true,
         selected: true,
-        paymentSource: 'Primary Corporate Card •••• 4092',
+        paymentSource: undefined,
       };
       setCandidates([fallback]);
       setSelectedCandidate(fallback);
@@ -194,8 +194,30 @@ export const AddUploadInvoice: React.FC = () => {
     if (!selectedCandidate) return;
     setIsSaving(true);
 
-    await db.createSubscription({
-      user_id: user?.id || 'default-user',
+    const userId = user?.id || 'default-user';
+    let documentId = 'doc-' + Date.now();
+
+    // 1. Upload file to Supabase storage & create document record
+    if (file) {
+      const uploadRes = await db.uploadInvoiceFile(file, userId);
+      const docRecord = await db.createDocumentRecord({
+        user_id: userId,
+        storage_path: uploadRes.storagePath,
+        original_filename: file.name,
+        mime_type: file.type || 'application/pdf',
+        file_size: file.size,
+        processing_status: 'completed',
+        raw_ocr_data: selectedCandidate || null,
+      });
+      documentId = docRecord.id;
+    }
+
+    const modeLabel = selectedCandidate.paymentSource?.trim() || 'Not available in invoice';
+    const modeBadge = selectedCandidate.paymentSource?.trim() ? 'AutoPay: Active' : 'Not available in invoice';
+
+    // 2. Create verified subscription record
+    const created = await db.createSubscription({
+      user_id: userId,
       merchant_name: selectedCandidate.merchantName,
       category: selectedCandidate.category,
       amount: selectedCandidate.amount,
@@ -203,11 +225,32 @@ export const AddUploadInvoice: React.FC = () => {
       billing_interval: 1,
       billing_interval_unit: selectedCandidate.cadence === 'yearly' ? 'years' : 'months',
       next_billing_date: selectedCandidate.date,
-      payment_mode_label: selectedCandidate.paymentSource,
+      payment_mode_label: modeLabel,
+      payment_mode_badge: modeBadge,
       status: unconfirmedEstimate ? 'needs_review' : 'active',
       confidence_status: unconfirmedEstimate ? 'unconfirmed_estimate' : 'verified',
       notes: `Extracted from statement: ${selectedCandidate.rawString}`,
     });
+
+    // 3. Create extracted transaction record
+    if (file) {
+      await db.createExtractedTransaction({
+        user_id: userId,
+        document_id: documentId,
+        merchant_name: selectedCandidate.merchantName,
+        transaction_description: selectedCandidate.rawString,
+        amount: selectedCandidate.amount,
+        currency: selectedCandidate.currency as any,
+        transaction_date: selectedCandidate.date,
+        suggested_cadence: selectedCandidate.cadence,
+        suggested_category: selectedCandidate.category,
+        confidence_score: selectedCandidate.confidence / 100,
+        possible_duplicate: Boolean(selectedCandidate.isDuplicate),
+        matched_subscription_id: created.id,
+        is_recurring_candidate: true,
+        review_status: 'confirmed',
+      });
+    }
 
     setIsSaving(false);
     navigate('/subscriptions');
@@ -520,7 +563,18 @@ export const AddUploadInvoice: React.FC = () => {
                     </div>
 
                     <div>
-                      <label className="block text-slate-400 font-semibold mb-1">Payment Source Account</label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-slate-400 font-semibold">Payment Source Account</label>
+                        {selectedCandidate.paymentSource ? (
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold border border-emerald-200 dark:border-emerald-800">
+                            Matched Invoice
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-bold border border-slate-200 dark:border-slate-700">
+                            Not available in invoice
+                          </span>
+                        )}
+                      </div>
                       <input
                         type="text"
                         value={selectedCandidate.paymentSource || ''}
@@ -530,8 +584,8 @@ export const AddUploadInvoice: React.FC = () => {
                             paymentSource: e.target.value,
                           })
                         }
-                        placeholder="e.g. HDFC Visa •••• 4090 or UPI AutoPay"
-                        className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-medium"
+                        placeholder="Not available in invoice — you may optionally link one"
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-medium placeholder:text-slate-400"
                       />
                     </div>
 
