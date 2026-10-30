@@ -152,6 +152,12 @@ export const AddManualSubscription: React.FC = () => {
       unit = customUnit;
     }
 
+    const selectedPs = paymentSources.find(p => p.id === paymentSourceId);
+    let modeLabel = selectedPs ? selectedPs.display_name : (currency === 'INR' ? 'UPI AutoPay (Google Pay / PhonePe)' : 'Corporate Card •••• 4092');
+    const isUpi = modeLabel.toLowerCase().includes('upi') || modeLabel.toLowerCase().includes('phonepe') || modeLabel.toLowerCase().includes('gpay');
+    const isCard = modeLabel.toLowerCase().includes('card') || modeLabel.toLowerCase().includes('visa') || modeLabel.toLowerCase().includes('mastercard') || modeLabel.toLowerCase().includes('••••');
+    const modeBadge = isUpi ? 'UPI AutoPay: Active' : isCard ? 'Card Auto-Debit: Active' : 'AutoPay: Active';
+
     const createdSub = await db.createSubscription({
       user_id: user?.id || 'default-user',
       merchant_name: merchantName.trim(),
@@ -164,6 +170,8 @@ export const AddManualSubscription: React.FC = () => {
       trial_start_date: isTrial ? trialStartDate : undefined,
       trial_end_date: isTrial ? trialEndDate : undefined,
       payment_source_id: paymentSourceId || undefined,
+      payment_mode_label: modeLabel,
+      payment_mode_badge: modeBadge,
       status: isTrial ? 'trial' : 'active',
       confidence_status: 'verified',
       notes,
@@ -306,15 +314,15 @@ export const AddManualSubscription: React.FC = () => {
             </div>
 
             {/* Currency & Amount */}
-            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-start">
               <div className="sm:col-span-4">
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 h-4 flex items-center">
                   Currency
                 </label>
                 <select
                   value={currency}
                   onChange={(e) => setCurrency(e.target.value as Currency)}
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#2446D8]"
+                  className="h-11 w-full px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#2446D8]"
                 >
                   <option value="USD">USD ($)</option>
                   <option value="INR">INR (₹)</option>
@@ -324,11 +332,11 @@ export const AddManualSubscription: React.FC = () => {
               </div>
 
               <div className="sm:col-span-8">
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 h-4 flex items-center">
                   Recurring Amount *
                 </label>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-slate-400 text-sm">
+                <div className="h-11 relative flex items-center rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-hidden focus-within:ring-2 focus-within:ring-[#2446D8]">
+                  <span className="h-full px-3.5 flex items-center justify-center font-bold text-slate-500 dark:text-slate-300 text-xs bg-slate-50 dark:bg-slate-700/60 border-r border-slate-200 dark:border-slate-700 shrink-0">
                     {currency === 'INR' ? '₹' : currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : '$'}
                   </span>
                   <input
@@ -338,7 +346,7 @@ export const AddManualSubscription: React.FC = () => {
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
                     placeholder="15.00"
-                    className="w-full pl-8 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-bold text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#2446D8]/20 focus:border-[#2446D8]"
+                    className="h-full flex-1 px-3.5 text-xs font-bold text-slate-900 dark:text-white bg-transparent placeholder:text-slate-400 focus:outline-none min-w-0"
                   />
                 </div>
               </div>

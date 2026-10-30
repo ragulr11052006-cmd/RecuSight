@@ -328,7 +328,7 @@ const INITIAL_SUBSCRIPTIONS: Subscription[] = [
     billing_interval: 1,
     billing_interval_unit: 'months',
     next_billing_date: 'Nov 24, 2026',
-    payment_mode_label: 'HDFC Visa •••• 4090',
+    payment_mode_label: 'UPI AutoPay (Google Pay)',
     payment_mode_badge: 'UPI AutoPay: Active',
     status: 'active',
     confidence_status: 'verified',
@@ -448,7 +448,7 @@ const INITIAL_SUBSCRIPTIONS: Subscription[] = [
     billing_interval: 1,
     billing_interval_unit: 'months',
     next_billing_date: 'Nov 04, 2026',
-    payment_mode_label: 'HDFC Visa •••• 4090',
+    payment_mode_label: 'UPI AutoPay (Google Pay)',
     payment_mode_badge: 'UPI AutoPay: Active',
     status: 'active',
     confidence_status: 'verified',
@@ -564,7 +564,7 @@ const INITIAL_SUBSCRIPTIONS: Subscription[] = [
     billing_interval: 1,
     billing_interval_unit: 'years',
     next_billing_date: 'Nov 26, 2026',
-    payment_mode_label: 'HDFC Visa •••• 4090',
+    payment_mode_label: 'UPI AutoPay (Google Pay)',
     payment_mode_badge: 'UPI AutoPay: Active',
     status: 'needs_review',
     confidence_status: 'unconfirmed_estimate',
@@ -698,10 +698,36 @@ export const db = {
     const sources = getFromStorage<PaymentSource[]>('payment_sources', INITIAL_PAYMENT_SOURCES);
     return all
       .filter(s => s.user_id === userId || (userId === 'default-user' || userId === 'demo-user-123' ? s.user_id === 'default-user' : false))
-      .map(s => ({
-        ...s,
-        payment_source: sources.find(p => p.id === s.payment_source_id),
-      }));
+      .map(s => {
+        const ps = sources.find(p => p.id === s.payment_source_id);
+        let modeLabel = s.payment_mode_label;
+        let modeBadge = s.payment_mode_badge;
+
+        if (!modeLabel) {
+          if (ps) {
+            modeLabel = ps.display_name;
+          } else {
+            modeLabel = s.currency === 'INR' ? 'UPI AutoPay (Google Pay)' : 'Corporate Card •••• 4092';
+          }
+        }
+        // Correct legacy contradictory pairs (e.g. HDFC Visa text with UPI badge)
+        if (modeBadge?.includes('UPI') && modeLabel.includes('Visa')) {
+          modeLabel = 'UPI AutoPay (Google Pay)';
+        }
+
+        if (!modeBadge) {
+          const isUpi = modeLabel.toLowerCase().includes('upi') || modeLabel.toLowerCase().includes('gpay') || modeLabel.toLowerCase().includes('phonepe');
+          const isCard = modeLabel.toLowerCase().includes('visa') || modeLabel.toLowerCase().includes('card') || modeLabel.toLowerCase().includes('••••');
+          modeBadge = isUpi ? 'UPI AutoPay: Active' : isCard ? 'Card Auto-Debit: Active' : 'AutoPay: Active';
+        }
+
+        return {
+          ...s,
+          payment_source: ps,
+          payment_mode_label: modeLabel,
+          payment_mode_badge: modeBadge,
+        };
+      });
   },
 
   async createSubscription(sub: Omit<Subscription, 'id' | 'created_at' | 'updated_at'>): Promise<Subscription> {

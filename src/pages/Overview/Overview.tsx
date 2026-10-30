@@ -699,7 +699,10 @@ export const Overview: React.FC = () => {
                   const endsInDays = trial.next_billing_date
                     ? Math.max(0, Math.ceil((new Date(trial.next_billing_date).getTime() - now.getTime()) / (1000 * 3600 * 24)))
                     : 3;
-                  const paymentSourceDisplay = trial.payment_source?.display_name || 'Card ••4821';
+                  const paymentSourceDisplay =
+                    trial.payment_mode_label ||
+                    trial.payment_source?.display_name ||
+                    (prefCur === 'INR' ? 'UPI AutoPay (Google Pay)' : 'Corporate Card •••• 4092');
                   return (
                     <div key={trial.id} className="p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 shadow-xs space-y-2.5">
                       <div className="flex items-start justify-between">
@@ -827,7 +830,10 @@ export const Overview: React.FC = () => {
                   : 7;
                 const isUrgent = diffDays <= 1;
                 const isWarning = diffDays <= 5;
-                const paymentSource = sub.payment_source?.display_name || 'Card ••4821';
+                const paymentSource =
+                  sub.payment_mode_label ||
+                  sub.payment_source?.display_name ||
+                  (prefCur === 'INR' ? 'UPI AutoPay (Google Pay)' : 'Corporate Card •••• 4092');
                 return (
                   <div
                     key={sub.id}
@@ -926,7 +932,7 @@ export const Overview: React.FC = () => {
                           </span>
                         </div>
                         <span className="text-[10px] text-slate-400 block mt-0.5">
-                          {sub.category}
+                          {sub.category} • <span className="font-semibold text-slate-600 dark:text-slate-300">{sub.payment_mode_label || sub.payment_source?.display_name || (prefCur === 'INR' ? 'UPI AutoPay (Google Pay)' : 'Corporate Card •••• 4092')}</span>
                         </span>
                       </div>
                     </div>
