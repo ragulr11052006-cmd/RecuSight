@@ -71,9 +71,108 @@ export const Reminders: React.FC = () => {
   } | null>(null);
 
   // Filter confirmed vs unconfirmed subscriptions
-  const scheduledSubscriptions = subscriptions.filter(s => Boolean(s.next_billing_date));
+  const scheduledSubscriptions = subscriptions.filter(s => Boolean(s.next_billing_date) && s.status !== 'cancelled' && s.status !== 'paused');
   const unconfirmedSubs = subscriptions.filter(s => !s.next_billing_date || s.status === 'needs_review');
-  const allScheduledCount = reminders.filter(r => r.status === 'scheduled').length + scheduledSubscriptions.length;
+
+  // Unified reminders list: Link explicit reminders to active subscriptions or synthesize automated alerts
+  const unifiedReminders = React.useMemo(() => {
+    const list: Array<{
+      id: string;
+      subscriptionId: string;
+      merchantName: string;
+      amount: number;
+      currency: string;
+      billingIntervalUnit: string;
+      scheduledAt: string;
+      reminderType: string;
+      deliveryChannel: string;
+      status: 'scheduled' | 'failed' | 'sent';
+      notes?: string;
+      subscription?: Subscription;
+    }> = [];
+
+    const processedSubIds = new Set<string>();
+
+    // 1. Process explicit reminders from database
+    reminders.forEach((rem) => {
+      const sub = subscriptions.find(s => s.id === rem.subscription_id) || rem.subscription;
+      if (sub && sub.status !== 'cancelled' && sub.status !== 'paused') {
+        processedSubIds.add(sub.id);
+        list.push({
+          id: rem.id,
+          subscriptionId: sub.id,
+          merchantName: sub.merchant_name,
+          amount: sub.amount,
+          currency: sub.currency,
+          billingIntervalUnit: sub.billing_interval_unit || 'months',
+          scheduledAt: rem.scheduled_at || sub.next_billing_date || '',
+          reminderType: rem.reminder_type || (sub.status === 'trial' ? 'trial_expiry' : 'renewal_notice'),
+          deliveryChannel: rem.delivery_channel || 'email',
+          status: (rem.status as any) || 'scheduled',
+          notes: rem.notes,
+          subscription: sub,
+        });
+      } else if (!sub) {
+        list.push({
+          id: rem.id,
+          subscriptionId: rem.subscription_id,
+          merchantName: rem.notes?.split(' ')[0] || 'Subscription',
+          amount: 0,
+          currency: 'INR',
+          billingIntervalUnit: 'months',
+          scheduledAt: rem.scheduled_at,
+          reminderType: rem.reminder_type || 'renewal_notice',
+          deliveryChannel: rem.delivery_channel || 'email',
+          status: (rem.status as any) || 'scheduled',
+          notes: rem.notes,
+        });
+      }
+    });
+
+    // 2. Add automated reminders for confirmed active subscriptions that do not have an explicit reminder yet
+    scheduledSubscriptions.forEach((sub) => {
+      if (!processedSubIds.has(sub.id)) {
+        list.push({
+          id: `auto-${sub.id}`,
+          subscriptionId: sub.id,
+          merchantName: sub.merchant_name,
+          amount: sub.amount,
+          currency: sub.currency,
+          billingIntervalUnit: sub.billing_interval_unit || 'months',
+          scheduledAt: sub.next_billing_date || '',
+          reminderType: sub.status === 'trial' ? 'trial_expiry' : 'renewal_notice',
+          deliveryChannel: 'email',
+          status: 'scheduled',
+          notes: `Automated renewal notification for ${sub.merchant_name}`,
+          subscription: sub,
+        });
+      }
+    });
+
+    // Sort by scheduled date ascending
+    return list.sort((a, b) => {
+      const timeA = new Date(a.scheduledAt).getTime() || 0;
+      const timeB = new Date(b.scheduledAt).getTime() || 0;
+      return timeA - timeB;
+    });
+  }, [reminders, subscriptions, scheduledSubscriptions]);
+
+  const scheduledReminders = unifiedReminders.filter(r => r.status === 'scheduled');
+  const failedReminders = unifiedReminders.filter(r => r.status === 'failed');
+
+  // Exact tally matching active tab
+  const allScheduledCount = scheduledReminders.length;
+  const failedCount = failedReminders.length;
+  const cannotScheduleCount = unconfirmedSubs.length;
+  const allRemindersCount = unifiedReminders.length;
+
+  const displayedReminders = activeTab === 'all'
+    ? unifiedReminders
+    : activeTab === 'scheduled'
+    ? scheduledReminders
+    : activeTab === 'failed'
+    ? failedReminders
+    : [];
 
   useEffect(() => {
     loadData();
@@ -125,13 +224,26 @@ export const Reminders: React.FC = () => {
 
   const handleSetManualDate = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Simulate updating Notion AI renewal date
+    const subToUpdate = subscriptions.find(s => s.id === selectedSubId || s.merchant_name.toLowerCase() === selectedSubForDate.toLowerCase());
+    if (subToUpdate) {
+      await db.updateSubscription(subToUpdate.id, {
+        next_billing_date: manualDateInput,
+        status: subToUpdate.status === 'needs_review' ? 'active' : subToUpdate.status,
+      });
+      setDiagnosticAlert({
+        show: true,
+        channel: 'Schedule Engine',
+        message: `Renewal date for ${subToUpdate.merchant_name} updated to ${manualDateInput}. Reminder schedule activated for 2 days prior.`,
+      });
+      await loadData();
+    } else {
+      setDiagnosticAlert({
+        show: true,
+        channel: 'Schedule Engine',
+        message: `Renewal date for ${selectedSubForDate} updated to ${manualDateInput}. Reminder schedule activated for 2 days prior.`,
+      });
+    }
     setShowSetDateModal(false);
-    setDiagnosticAlert({
-      show: true,
-      channel: 'Schedule Engine',
-      message: `Renewal date for ${selectedSubForDate} updated to ${manualDateInput}. Reminder schedule activated for 2 days prior.`,
-    });
     setTimeout(() => setDiagnosticAlert(null), 5000);
   };
 
@@ -215,7 +327,7 @@ export const Reminders: React.FC = () => {
               : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
           }`}
         >
-          All Reminders <span className="ml-1 opacity-90">{allScheduledCount}</span>
+          All Reminders <span className="ml-1 opacity-90">{allRemindersCount}</span>
         </button>
 
         <button
@@ -241,7 +353,7 @@ export const Reminders: React.FC = () => {
           }`}
         >
           <span className="w-4 h-4 rounded-full bg-red-100 text-red-700 flex items-center justify-center text-[10px] font-black shrink-0">!</span>
-          <span>Failed / Blocked {reminders.filter(r => r.status === 'failed').length}</span>
+          <span>Failed / Blocked {failedCount}</span>
         </button>
 
         <button
@@ -254,7 +366,7 @@ export const Reminders: React.FC = () => {
           }`}
         >
           <span className="w-4 h-4 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center text-[10px] font-black shrink-0">?</span>
-          <span>Cannot Schedule {unconfirmedSubs.length}</span>
+          <span>Cannot Schedule {cannotScheduleCount}</span>
         </button>
       </div>
 
@@ -275,64 +387,83 @@ export const Reminders: React.FC = () => {
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-[#2446D8]" />
                 <h2 className="font-bold text-sm text-slate-900 dark:text-white">
-                  Upcoming Reminders
+                  {activeTab === 'failed' ? 'Failed & Blocked Alerts' : activeTab === 'cannot_schedule' ? 'Unconfirmed Subscriptions' : 'Upcoming Reminders'}
                 </h2>
               </div>
               <span className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
-                AUTOMATED DISPATCH
+                {activeTab === 'failed' ? 'ISSUE RESOLUTION' : 'AUTOMATED DISPATCH'}
               </span>
             </div>
 
             {/* List of Scheduled Items matching real subscriptions */}
             <div className="space-y-6">
-              {allScheduledCount === 0 ? (
+              {displayedReminders.length === 0 ? (
                 <div className="py-12 px-4 text-center space-y-3">
                   <div className="w-12 h-12 rounded-2xl bg-blue-50 dark:bg-blue-950/40 text-[#2446D8] flex items-center justify-center mx-auto">
                     <Bell className="w-6 h-6" />
                   </div>
                   <div className="space-y-1">
                     <h3 className="font-bold text-sm text-slate-800 dark:text-slate-200">
-                      No Reminders Scheduled
+                      {activeTab === 'failed'
+                        ? 'No Failed Reminders'
+                        : activeTab === 'cannot_schedule'
+                        ? 'All Subscriptions Confirmed'
+                        : 'No Reminders Scheduled'}
                     </h3>
                     <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                      You have no active subscriptions or reminders. Add your subscriptions to schedule automated renewal reminders before bank debits occur.
+                      {activeTab === 'failed'
+                        ? 'All renewal notices and pre-debit notifications are operating normally with zero delivery errors.'
+                        : activeTab === 'cannot_schedule'
+                        ? 'Every subscription profile has a verified next renewal date with automated alerts scheduled.'
+                        : 'You have no active subscription reminders. Add your subscriptions to schedule automated renewal reminders before bank debits occur.'}
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => navigate('/subscriptions/new')}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#2446D8] hover:bg-blue-700 text-white font-bold text-xs shadow-xs transition-colors cursor-pointer"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Add Subscription</span>
-                  </button>
+                  {activeTab !== 'failed' && (
+                    <button
+                      type="button"
+                      onClick={() => navigate('/subscriptions/new')}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#2446D8] hover:bg-blue-700 text-white font-bold text-xs shadow-xs transition-colors cursor-pointer"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Add Subscription</span>
+                    </button>
+                  )}
                 </div>
               ) : (
-                scheduledSubscriptions.map((sub) => {
-                  const daysUntil = sub.next_billing_date
-                    ? Math.ceil((new Date(sub.next_billing_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+                displayedReminders.map((item) => {
+                  const targetTime = new Date(item.scheduledAt).getTime();
+                  const nowTime = new Date().getTime();
+                  const daysUntil = item.scheduledAt
+                    ? Math.ceil((targetTime - nowTime) / (1000 * 60 * 60 * 24))
                     : 0;
+
+                  const dateLabel = item.scheduledAt
+                    ? item.scheduledAt.includes('T')
+                      ? item.scheduledAt.split('T')[0]
+                      : item.scheduledAt
+                    : 'Upcoming';
+
                   return (
-                    <div key={sub.id} className="space-y-2">
+                    <div key={item.id} className="space-y-2">
                       <div className="flex items-center justify-between text-xs font-bold text-slate-900 dark:text-white">
                         <div className="flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full bg-[#2446D8]" />
-                          <span>{sub.next_billing_date} • 9:00 AM</span>
+                          <span className={`w-2 h-2 rounded-full ${item.status === 'failed' ? 'bg-red-500' : 'bg-[#2446D8]'}`} />
+                          <span>{dateLabel} • 9:00 AM</span>
                         </div>
                         <span className="text-[11px] font-normal text-slate-400">
-                          {daysUntil > 0 ? `${daysUntil} days prior` : 'Renewal due soon'}
+                          {daysUntil > 1 ? `${daysUntil} days prior` : daysUntil === 1 ? '1 day prior' : daysUntil === 0 ? 'Due today' : 'Renewal due soon'}
                         </span>
                       </div>
 
                       <div className="p-4 rounded-2xl bg-[#F8FAFC] dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-slate-200 dark:hover:border-slate-700 transition-all">
                         <div className="flex items-center gap-3.5">
-                          <MerchantLogo name={sub.merchant_name} size="md" />
+                          <MerchantLogo name={item.merchantName} size="md" />
                           <div>
                             <div className="flex items-center gap-2">
                               <span className="font-bold text-sm text-slate-900 dark:text-white">
-                                {sub.merchant_name}
+                                {item.merchantName}
                               </span>
-                              {sub.status === 'trial' ? (
+                              {item.reminderType === 'trial_expiry' ? (
                                 <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#FEF3C7] dark:bg-amber-950/60 text-[#92400E] dark:text-amber-300 border border-[#FDE68A] dark:border-amber-800">
                                   Trial Expire Soon
                                 </span>
@@ -343,7 +474,7 @@ export const Reminders: React.FC = () => {
                               )}
                             </div>
                             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                              Recurring commitment: {formatCurrencyAmount(sub.amount, user?.preferred_currency || 'INR', sub.currency)}/mo
+                              Recurring commitment: {formatCurrencyAmount(item.amount, user?.preferred_currency || 'INR', (item.currency as any) || 'INR')}{item.billingIntervalUnit === 'years' ? '/yr' : '/mo'}
                             </p>
                             <div className="flex items-center gap-2 text-[11px] text-slate-400 mt-2">
                               <span className="flex items-center gap-1">
@@ -360,10 +491,17 @@ export const Reminders: React.FC = () => {
                         </div>
 
                         <div className="flex flex-col items-end gap-3 shrink-0 ml-3">
-                          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#EEF2FF] dark:bg-blue-950/60 text-[#2446D8] dark:text-blue-300 font-bold text-xs">
-                            <Calendar className="w-3.5 h-3.5" />
-                            <span>Scheduled</span>
-                          </div>
+                          {item.status === 'failed' ? (
+                            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-red-50 dark:bg-red-950/60 text-red-600 dark:text-red-300 font-bold text-xs">
+                              <AlertCircle className="w-3.5 h-3.5" />
+                              <span>Failed</span>
+                            </div>
+                          ) : (
+                            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#EEF2FF] dark:bg-blue-950/60 text-[#2446D8] dark:text-blue-300 font-bold text-xs">
+                              <Calendar className="w-3.5 h-3.5" />
+                              <span>Scheduled</span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
