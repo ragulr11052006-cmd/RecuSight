@@ -502,10 +502,10 @@ export const Overview: React.FC = () => {
       {/* ========================================================= */}
       {/* MIDDLE ROW: SPEND ANALYSIS & FREE TRIALS ENDING           */}
       {/* ========================================================= */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
-        {/* Spend Analysis Card (7 Cols) */}
-        <div className="lg:col-span-7 bg-white dark:bg-slate-900 rounded-3xl p-6 lg:p-7 border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col justify-between">
+        {/* Spend Analysis Card (Even 1/2) */}
+        <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 lg:p-7 border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-4">
               <div>
@@ -676,8 +676,8 @@ export const Overview: React.FC = () => {
           </div>
         </div>
 
-        {/* Free Trials Ending Card (5 Cols) */}
-        <div className="lg:col-span-5 bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col justify-between">
+        {/* Free Trials Ending Card (Even 1/2) */}
+        <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-4">
               <div>
@@ -766,10 +766,10 @@ export const Overview: React.FC = () => {
       {/* ========================================================= */}
       {/* BOTTOM ROW: UPCOMING RENEWALS & RECENT SUBSCRIPTIONS      */}
       {/* ========================================================= */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
-        {/* Upcoming Renewals Table Card (8 Cols) */}
-        <div className="lg:col-span-8 bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs">
+        {/* Upcoming Renewals Table Card (Even 1/2) */}
+        <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col justify-between">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
             <div>
               <h2 className="text-lg font-bold text-[#151B2D] dark:text-white">
@@ -896,8 +896,8 @@ export const Overview: React.FC = () => {
           </div>
         </div>
 
-        {/* Recent Subscriptions Card (4 Cols) */}
-        <div className="lg:col-span-4 bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col justify-between">
+        {/* Recent Subscriptions Card (Even 1/2) */}
+        <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-4">
               <div>

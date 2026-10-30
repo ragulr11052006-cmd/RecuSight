@@ -53,6 +53,8 @@ export const SignUp: React.FC = () => {
     if (error) {
       setErrorMessage(error.message);
       setGoogleLoading(false);
+    } else {
+      navigate('/overview');
     }
   };
 

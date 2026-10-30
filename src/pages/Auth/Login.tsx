@@ -65,6 +65,8 @@ export const Login: React.FC = () => {
     if (error) {
       setErrorMessage(error.message);
       setGoogleLoading(false);
+    } else {
+      navigate('/overview');
     }
   };
 
