@@ -422,6 +422,15 @@ export const KNOWN_BRANDS: KnownBrand[] = [
     ],
   },
   {
+    id: 'disney_hotstar',
+    canonicalName: 'Disney+ Hotstar',
+    defaultServiceName: 'Hotstar Super / Premium',
+    category: 'Streaming & Ent',
+    patterns: [
+      /\b(?:disney\+?\s*hotstar|hotstar|super\s*\d+\s*year|mobile\s*\d+\s*months?)\b/i,
+    ],
+  },
+  {
     id: 'canva',
     canonicalName: 'Canva',
     defaultServiceName: 'Canva Pro',
@@ -459,6 +468,7 @@ export function getCanonicalMerchantName(raw: string): string {
   if (/linkedin/i.test(lower)) return 'LinkedIn';
   if (/adobe/i.test(lower)) return 'Adobe';
   if (/netflix/i.test(lower)) return 'Netflix';
+  if (/hotstar|disney/i.test(lower)) return 'Disney+ Hotstar';
   if (/spotify/i.test(lower)) return 'Spotify';
   if (/figma/i.test(lower)) return 'Figma';
   if (/github/i.test(lower)) return 'GitHub';
@@ -568,29 +578,35 @@ export function identifyMerchant(
     }
   }
 
-  // 2. Official Website / Domain & Support Email Domain
-  const domainMatch = cleanDoc.match(/(?:https?:\/\/)?(?:www\.)?([a-zA-Z0-9-]{3,30})\.(?:com|ai|io|net|in|org|co|app|dev|cloud)\b/i);
-  if (domainMatch && domainMatch[1] && !/^(?:google|apple|microsoft|stripe|razorpay|fastspring|paddle|paypal|adobe)$/i.test(domainMatch[1])) {
-    const domainPart = domainMatch[1];
-    const canonical = getCanonicalMerchantName(domainPart);
-    const service = extractLineItemService(cleanDoc, canonical);
-    return {
-      merchantName: {
-        value: canonical,
-        evidenceText: domainMatch[0],
-        page: 1,
-        confidence: 90,
-        status: 'high',
-      },
-      serviceName: {
-        value: service,
-        evidenceText: domainMatch[0],
-        page: 1,
-        confidence: 82,
-        status: 'high',
-      },
-      category: detectCategory(cleanDoc + ' ' + canonical + ' ' + service),
-    };
+  // 2. Known brands in document body (with strict false-positive prevention)
+  for (const brand of KNOWN_BRANDS) {
+    for (const pattern of brand.patterns) {
+      if (pattern.test(cleanDoc)) {
+        if (brand.id === 'adobe') {
+          // Adobe must appear in the actual invoice body or company name, NOT just a PDF tool tag
+          const isRealAdobe = /\b(?:adobe\s*systems|adobe\s*inc|creative\s*cloud|adobe\s*acrobat|billed\s*by\s*adobe|payment\s*to\s*adobe)\b/i.test(cleanDoc);
+          if (!isRealAdobe) continue;
+        }
+        const service = extractLineItemService(cleanDoc, brand.canonicalName);
+        return {
+          merchantName: {
+            value: brand.canonicalName,
+            evidenceText: pattern.source,
+            page: 1,
+            confidence: 96,
+            status: 'high',
+          },
+          serviceName: {
+            value: service || brand.defaultServiceName,
+            evidenceText: pattern.source,
+            page: 1,
+            confidence: 90,
+            status: 'high',
+          },
+          category: brand.category,
+        };
+      }
+    }
   }
 
   // 3. Header entity in first 15 lines of Page 1 (prioritize lines with corporate suffixes)
@@ -599,12 +615,12 @@ export function identifyMerchant(
     .slice(0, 15)
     .filter((l) => !/\b(?:producer|creator|author|title|subject|keywords|indesign|distiller|acrobat\s*distiller|pdf\s*library|xmp)\b/i.test(l));
 
-  // 3a. Corporate legal entity in header lines (Inc, LLC, Ltd, GmbH, Company, Corp, etc.)
+  // 3a. Corporate legal entity in header lines (Inc, LLC, LLP, Ltd, GmbH, Company, Corp, etc.)
   for (const line of headerLines) {
     if (/^(?:invoice|tax\s*invoice|bill\s*to|ship\s*to|customer|client|order|p\.?o\.?|date|statement|receipt|gstin|pan|cin)\b/i.test(line)) {
       continue;
     }
-    const corpMatch = line.match(/^([A-Za-z0-9\s&.,'-]+?\b(?:inc\.?|llc|ltd\.?|limited|corp\.?|corporation|gmbh|company|co\.?|pvt\.?\s*ltd\.?|pte\.?\s*ltd\.?|b\.?v\.?|s\.?a\.?|plc|technologies|software|entertainment|services))\b/i);
+    const corpMatch = line.match(/^([A-Za-z0-9\s&.,'-]+?\b(?:inc\.?|llc|llp|ltd\.?|limited|corp\.?|corporation|gmbh|company|co\.?|pvt\.?\s*ltd\.?|pte\.?\s*ltd\.?|b\.?v\.?|s\.?a\.?|plc|technologies|software|entertainment|services))\b/i);
     if (corpMatch && corpMatch[1]) {
       const candidate = cleanMerchantCandidate(corpMatch[1]);
       if (candidate) {
@@ -631,7 +647,35 @@ export function identifyMerchant(
     }
   }
 
-  // 3b. Header line without generic words
+  // 4. Official Website / Domain (Explicit URL or Official Sender Only, NEVER personal email)
+  const explicitUrlMatch = cleanDoc.match(/(?:https?:\/\/|www\.)([a-zA-Z0-9-]{3,30})\.(?:com|ai|io|net|in|org|co|app|dev|cloud)\b/i);
+  if (explicitUrlMatch && explicitUrlMatch[1]) {
+    const domainPart = explicitUrlMatch[1];
+    const isExcluded = /^(?:google|apple|microsoft|stripe|razorpay|fastspring|paddle|paypal|adobe|gmail|yahoo|hotmail|outlook|icloud|proton|live|msn|rediff|zoho|mail|ymail|aol)$/i.test(domainPart);
+    if (!isExcluded) {
+      const canonical = getCanonicalMerchantName(domainPart);
+      const service = extractLineItemService(cleanDoc, canonical);
+      return {
+        merchantName: {
+          value: canonical,
+          evidenceText: explicitUrlMatch[0],
+          page: 1,
+          confidence: 90,
+          status: 'high',
+        },
+        serviceName: {
+          value: service,
+          evidenceText: explicitUrlMatch[0],
+          page: 1,
+          confidence: 82,
+          status: 'high',
+        },
+        category: detectCategory(cleanDoc + ' ' + canonical + ' ' + service),
+      };
+    }
+  }
+
+  // 5. Header line without generic words
   for (const line of headerLines) {
     if (/^(?:invoice|tax\s*invoice|bill|receipt|statement|original|duplicate|gstin|cin|date|bill\s*to|ship\s*to|customer|order|p\.?o\.?|page\s*\d)/i.test(line)) {
       continue;
@@ -657,37 +701,6 @@ export function identifyMerchant(
             status: 'medium',
           },
           category: detectCategory(cleanDoc + ' ' + canonical + ' ' + service),
-        };
-      }
-    }
-  }
-
-  // 4. Known brands in document body (as secondary check, with strict false-positive prevention)
-  for (const brand of KNOWN_BRANDS) {
-    for (const pattern of brand.patterns) {
-      if (pattern.test(cleanDoc)) {
-        if (brand.id === 'adobe') {
-          // Adobe must appear in the actual invoice body or company name, NOT just a PDF tool tag
-          const isRealAdobe = /\b(?:adobe\s*systems|adobe\s*inc|creative\s*cloud|adobe\s*acrobat|billed\s*by\s*adobe|payment\s*to\s*adobe)\b/i.test(cleanDoc);
-          if (!isRealAdobe) continue;
-        }
-        const service = extractLineItemService(cleanDoc, brand.canonicalName);
-        return {
-          merchantName: {
-            value: brand.canonicalName,
-            evidenceText: pattern.source,
-            page: 1,
-            confidence: 88,
-            status: 'high',
-          },
-          serviceName: {
-            value: service || brand.defaultServiceName,
-            evidenceText: pattern.source,
-            page: 1,
-            confidence: 82,
-            status: 'high',
-          },
-          category: brand.category,
         };
       }
     }
@@ -829,11 +842,11 @@ export function extractTotalAmountAndCurrency(
   let explicitCurrency: Currency | null = null;
 
   // Regex targeting final totals, subtotals, and taxes
-  const finalTotalRegex = /(?:grand\s*total|final\s*amount\s*(?:due|paid|charged|payable)?|total\s*amount\s*(?:due|paid|charged|payable)?|total\s*invoice\s*value|invoice\s*value|total\s*value|gesamtbetrag|endbetrag|rechnungsbetrag|montant\s*total|total\s*payable|net\s*payable|final\s*total|amount\s*paid|amount\s*due|total\s*charged|total\s*billed|invoice\s*total|total\s*pay[eé]|total\s*[:=]|total\s+amt|\btotal\b|\bpaid\b|\bamount\b)(?:\s*\([^)]*\))?[:\s]*([₹$€£]|inr|usd|eur|gbp|rs\.?)?\s*([0-9]{1,3}(?:[.,][0-9]{2,3})*(?:[.,][0-9]{1,2})?|[0-9]{1,6})\s*([₹$€£]|inr|usd|eur|gbp|\/-)?/i;
-  const subtotalRegex = /(?:subtotal|sub-total|sub\s+total|net\s*subtotal|net\s*amount|nettobetrag|zwischensumme|sous-total|base\s*imponible|taxable\s*value)[:\s]*([₹$€£]|inr|usd|eur|gbp|rs\.?)?\s*([0-9]{1,3}(?:[.,][0-9]{2,3})*(?:[.,][0-9]{1,2})?|[0-9]{1,6})\s*([₹$€£]|inr|usd|eur|gbp|\/-)?/i;
-  const taxRegex = /(?:(?:total\s*)?tax|gst|igst|cgst\s*\+\s*sgst|cgst|sgst|vat|tva|ust|mwst|steuern?)(?:\s*(?:@|at)?\s*\(?[0-9]+%?\)?|\s*\([^)]*\))?[:\s]*([₹$€£]|inr|usd|eur|gbp|rs\.?)?\s*([0-9]{1,3}(?:[.,][0-9]{2,3})*(?:[.,][0-9]{1,2})?|[0-9]{1,6})\s*([₹$€£]|inr|usd|eur|gbp|\/-)?/i;
+  const primaryTotalRegex = /(?:grand\s*total|final\s*amount\s*(?:due|paid|charged|payable)?|total\s*amount\s*(?:due|paid|charged|payable)?|total\s*invoice\s*value|invoice\s*value|total\s*value|gesamtbetrag|endbetrag|rechnungsbetrag|montant\s*total|total\s*payable|net\s*payable|final\s*total|amount\s*paid|amount\s*due|total\s*charged|total\s*billed|invoice\s*total|total\s*pay[eé]|total\s*[:=]|total\s+amt|\btotal\b|\bpaid\b)(?:\s*\([^)]*\))?[:\s]*([₹$€£]|inr|usd|eur|gbp|rs\.?)?\s*([0-9]{1,3}(?:,[0-9]{2,3})+(?:\.[0-9]{1,2})?|[0-9]{1,3}(?:\.[0-9]{3})+(?:,[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?|[0-9]+(?:,[0-9]{1,2})?|[0-9]+)\s*([₹$€£]|inr|usd|eur|gbp|\/-)?/i;
+  const subtotalRegex = /(?:subtotal|sub-total|sub\s+total|net\s*subtotal|net\s*amount|nettobetrag|zwischensumme|sous-total|base\s*imponible|taxable\s*value)[:\s]*([₹$€£]|inr|usd|eur|gbp|rs\.?)?\s*([0-9]{1,3}(?:,[0-9]{2,3})+(?:\.[0-9]{1,2})?|[0-9]{1,3}(?:\.[0-9]{3})+(?:,[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?|[0-9]+(?:,[0-9]{1,2})?|[0-9]+)\s*([₹$€£]|inr|usd|eur|gbp|\/-)?/i;
+  const taxRegex = /(?:(?:total\s*)?tax|gst|igst|1gst|cgst\s*\+\s*sgst|cgst|sgst|vat|tva|ust|mwst|steuern?)(?:\s*(?:@|at)?\s*\(?[0-9]+%?\)?|\s*\([^)]*\))?[:\s]*([₹$€£]|inr|usd|eur|gbp|rs\.?)?\s*([0-9]{1,3}(?:,[0-9]{2,3})+(?:\.[0-9]{1,2})?|[0-9]{1,3}(?:\.[0-9]{3})+(?:,[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?|[0-9]+(?:,[0-9]{1,2})?|[0-9]+)\s*([₹$€£]|inr|usd|eur|gbp|\/-)?/i;
 
-  // Pass 1: Line-by-line inspection
+  // Pass 1: Line-by-line inspection with primary total labels
   for (let i = 0; i < lines.length; i++) {
     const trimmed = lines[i].trim();
     if (!trimmed) continue;
@@ -858,7 +871,7 @@ export function extractTotalAmountAndCurrency(
         if (!extractedTax) {
           extractedTax = val;
           taxEvidence = trimmed;
-        } else if (/cgst|sgst|vat|tax/i.test(trimmed) && /cgst|sgst|vat|tax/i.test(taxEvidence || '')) {
+        } else if (/cgst|sgst|vat|tax|gst/i.test(trimmed) && /cgst|sgst|vat|tax|gst/i.test(taxEvidence || '')) {
           extractedTax = Math.round((extractedTax + val) * 100) / 100;
           taxEvidence = `${taxEvidence} + ${trimmed}`;
         }
@@ -875,7 +888,7 @@ export function extractTotalAmountAndCurrency(
 
     // Final Total check on current line
     if (!extractedTotal) {
-      const tm = trimmed.match(finalTotalRegex);
+      const tm = trimmed.match(primaryTotalRegex);
       if (tm && tm[2]) {
         const val = parseMonetaryValue(tm[2]);
         if (val && val > 0 && !isLikelyYearOrId(val, trimmed)) {
@@ -893,7 +906,7 @@ export function extractTotalAmountAndCurrency(
       } else if (isTotalCandidate && i + 1 < lines.length) {
         // Multi-line table support: Label on line i ("Total Amount Due:"), amount on line i + 1 ("$1,499.00")
         const nextLine = lines[i + 1].trim();
-        const nextMatch = nextLine.match(/^([₹$€£]|inr|usd|eur|gbp|rs\.?)?\s*([0-9]{1,3}(?:[.,][0-9]{2,3})*(?:[.,][0-9]{1,2})?|[0-9]{1,6})\s*([₹$€£]|inr|usd|eur|gbp|\/-)?$/i);
+        const nextMatch = nextLine.match(/^([₹$€£]|inr|usd|eur|gbp|rs\.?)?\s*([0-9]{1,3}(?:,[0-9]{2,3})+(?:\.[0-9]{1,2})?|[0-9]{1,3}(?:\.[0-9]{3})+(?:,[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?|[0-9]+(?:,[0-9]{1,2})?|[0-9]+)\s*([₹$€£]|inr|usd|eur|gbp|\/-)?$/i);
         if (nextMatch && nextMatch[2]) {
           const val = parseMonetaryValue(nextMatch[2]);
           if (val && val > 0 && !isLikelyYearOrId(val, nextLine)) {
@@ -909,6 +922,77 @@ export function extractTotalAmountAndCurrency(
             else if (sym === '₹' || sym.includes('rs') || sym === 'inr' || nextLine.includes('₹')) explicitCurrency = 'INR';
           }
         }
+      }
+    }
+  }
+
+  // Pass 1.5: Plan subscription price on purchases screens (e.g. "5,074.58/year + applicable taxes")
+  if (!extractedTotal) {
+    const planPriceRegex = /(?:[₹$€£]|inr|usd|eur|gbp|rs\.?)?\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)\s*(?:\/|\s*per\s*)(?:year|yr|month|mo|annum|quarter)\b/i;
+    for (const line of lines) {
+      const pm = line.match(planPriceRegex);
+      if (pm && pm[1]) {
+        const val = parseMonetaryValue(pm[1]);
+        if (val && val > 0 && !isLikelyYearOrId(val, line)) {
+          extractedTotal = val;
+          totalEvidence = line.trim();
+          totalConfidence = 90;
+          detectedAmounts.push(val);
+          break;
+        }
+      }
+    }
+  }
+
+  // Pass 1.8: Fallback bare "Amount:" check if no Total was found
+  if (!extractedTotal) {
+    const fallbackAmountRegex = /(?:amount|charged|fee|charge)[:\s]*([₹$€£]|inr|usd|eur|gbp|rs\.?)?\s*([0-9]{1,3}(?:,[0-9]{2,3})+(?:\.[0-9]{1,2})?|[0-9]{1,3}(?:\.[0-9]{3})+(?:,[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?|[0-9]+(?:,[0-9]{1,2})?|[0-9]+)\s*([₹$€£]|inr|usd|eur|gbp|\/-)?/i;
+    for (const line of lines) {
+      if (/subtotal|tax|discount|gst/i.test(line)) continue;
+      const am = line.match(fallbackAmountRegex);
+      if (am && am[2]) {
+        const val = parseMonetaryValue(am[2]);
+        if (val && val > 0 && !isLikelyYearOrId(val, line)) {
+          extractedTotal = val;
+          totalEvidence = line.trim();
+          totalConfidence = 85;
+          detectedAmounts.push(val);
+          break;
+        }
+      }
+    }
+  }
+
+  // Pass 2: Mathematical verification & Disambiguation of OCR-hallucinated Rupee symbol '2'
+  if (extractedSubtotal !== null && extractedTax !== null && extractedTotal !== null) {
+    if (extractedSubtotal > 1000 && extractedTax > 100 && extractedTotal > 1000) {
+      const subStr = String(extractedSubtotal);
+      const taxStr = String(extractedTax);
+      const totStr = String(extractedTotal);
+      if (subStr.startsWith('2') && taxStr.startsWith('2') && totStr.startsWith('2')) {
+        const strippedSub = parseFloat(subStr.slice(1));
+        const strippedTax = parseFloat(taxStr.slice(1));
+        const strippedTot = parseFloat(totStr.slice(1));
+        if (Math.abs((strippedSub + strippedTax) - strippedTot) < 0.05) {
+          extractedSubtotal = strippedSub;
+          extractedTax = strippedTax;
+          extractedTotal = strippedTot;
+          explicitCurrency = 'INR';
+          totalEvidence = `Disambiguated OCR ₹: ${strippedSub} + ${strippedTax} = ${strippedTot}`;
+        }
+      }
+    }
+  }
+
+  // Pass 2.2: INR specific common subscription tier OCR '₹' -> '2' correction
+  if (extractedTotal !== null && extractedTotal > 1000 && (explicitCurrency === 'INR' || /india|gstin|tax\s*number|maharashtra|okhdfcbank|upi/i.test(text))) {
+    const totStr = String(extractedTotal);
+    if (totStr.startsWith('2')) {
+      const strippedTot = parseFloat(totStr.slice(1));
+      if ([149, 199, 299, 499, 649, 799, 899, 999, 1199, 1499].includes(strippedTot)) {
+        extractedTotal = strippedTot;
+        explicitCurrency = 'INR';
+        totalEvidence = `Disambiguated OCR ₹ on Indian subscription plan: ₹${strippedTot}`;
       }
     }
   }
@@ -1120,11 +1204,13 @@ export function extractPaymentMethod(text: string): ExtractedField<string> {
     };
   }
 
-  // 5. UPI / AutoPay Handles & Apps
-  const upiIdMatch = clean.match(/\b([a-zA-Z0-9.\-_]{2,25}@(okhdfcbank|okaxis|oksbi|okicici|paytm|ybl|ibl|apl|axl|upi))\b/i);
+  // 5. UPI / AutoPay Handles & Apps (with support for masked characters e.g. y+++@okhdfcbank or y•••@okhdfcbank)
+  const upiIdMatch = clean.match(/\b([a-zA-Z0-9.\-_+*•·xX]{2,30}@(okhdfcbank|okaxis|oksbi|okicici|paytm|ybl|ibl|apl|axl|upi|federal|idfcbank|kotak|barodampay))\b/i);
   if (upiIdMatch) {
+    const rawHandle = upiIdMatch[1];
+    const cleanHandle = rawHandle.replace(/[+*·xX]{2,}/g, '•••');
     return {
-      value: `UPI AutoPay (${upiIdMatch[1]})`,
+      value: `UPI AutoPay (${cleanHandle})`,
       evidenceText: upiIdMatch[0],
       page: 1,
       confidence: 94,
@@ -1253,7 +1339,7 @@ export function extractDatesAndPeriod(
   // 1. Cadence / Frequency
   let freq: 'monthly' | 'yearly' | 'quarterly' | 'weekly' | null = null;
   let freqEvidence: string | null = null;
-  if (/yearly|annual|annually|per\s*year|\/yr|\/year|12\s*months|billed\s*annually/i.test(clean)) {
+  if (/yearly|annual|annually|per\s*year|\/yr|\/year|12\s*months|\b1\s*year\b|billed\s*annually/i.test(clean)) {
     freq = 'yearly';
     freqEvidence = 'Annual / Yearly frequency detected';
   } else if (/monthly|per\s*month|\/mo|\/month|billed\s*monthly/i.test(clean)) {
@@ -1274,7 +1360,8 @@ export function extractDatesAndPeriod(
   let billingPeriodStr: string | null = null;
   let billingPeriodEvidence: string | null = null;
   const periodMatch = clean.match(/(?:billing\s*period|service\s*period|period)[:\s]+([0-9]{1,2}[-/.\s]+[A-Za-z0-9]+[-/.\s]+[0-9]{2,4}\s*(?:to|-|through)\s*[0-9]{1,2}[-/.\s]+[A-Za-z0-9]+[-/.\s]+[0-9]{2,4})/i)
-    || clean.match(/(?:billing\s*period|service\s*period|period)[:\s]+([A-Za-z]{3,9}\s+[0-9]{1,2},?\s+[0-9]{4}\s*(?:to|-|through)\s*[A-Za-z]{3,9}\s+[0-9]{1,2},?\s+[0-9]{4})/i);
+    || clean.match(/(?:billing\s*period|service\s*period|period)[:\s]+([A-Za-z]{3,9}\s+[0-9]{1,2},?\s*[0-9]{2,4}\s*(?:to|-|through)\s*[A-Za-z]{3,9}\s+[0-9]{1,2},?\s*[0-9]{2,4})/i)
+    || clean.match(/\b([A-Za-z]{3,9}\s+[0-9]{1,2},?\s*[0-9]{2,4}\s*(?:to|-|through)\s*[A-Za-z]{3,9}\s+[0-9]{1,2},?\s*[0-9]{2,4})\b/i);
 
   if (periodMatch && periodMatch[1]) {
     billingPeriodStr = periodMatch[1].trim();
@@ -1286,7 +1373,7 @@ export function extractDatesAndPeriod(
   let invoiceDateEvidence: string | null = null;
   const invoiceDateRegexes = [
     /(?:invoice\s*date|date\s*of\s*invoice|date\s*of\s*issue|issue\s*date|bill\s*date|transaction\s*date|payment\s*date|date\s*de\s*facture|fecha\s*de\s*factura|datum\s*(?:\/\s*date)?|rechnungsdatum|datum)[:\s]+([A-Za-z0-9\s,./-]{6,25})(?=\r?\n|$|,|;)/i,
-    /(?:date|datum)[:\s]+([0-9]{1,2}[-/][0-9]{1,2}[-/][0-9]{2,4}|[A-Za-z]{3,9}\s+[0-9]{1,2},?\s+[0-9]{4})/i,
+    /(?:date|datum)[:\s]+([0-9]{1,2}[-/][0-9]{1,2}[-/](?:20[2-3][0-9]|[2-3][0-9])|[A-Za-z]{3,9}\s+[0-9]{1,2},?\s*[0-9]{2,4})/i,
   ];
 
   for (const re of invoiceDateRegexes) {
@@ -1306,7 +1393,7 @@ export function extractDatesAndPeriod(
   let renewalDateEvidence: string | null = null;
 
   const renewalRegexes = [
-    /(?:next\s*billing\s*date|next\s*renewal\s*date|renews\s*on|renewal\s*date|next\s*charge\s*date|valid\s*until|expiry\s*date|nächste\s*verlängerung|prochaine\s*facturation)[:\s]+([A-Za-z0-9\s,./-]{6,25})(?=\r?\n|$|,|;)/i,
+    /(?:next\s*billing\s*date|next\s*renewal\s*date|renews\s*on|renewal\s*date|next\s*charge\s*date|valid\s*until|expiry\s*date|plan\s*expires\s*(?:on)?|expires\s*(?:on)?|nächste\s*verlängerung|prochaine\s*facturation)[:\s]+([A-Za-z0-9\s,./-]{6,25})(?=\r?\n|$|,|;)/i,
   ];
 
   for (const re of renewalRegexes) {
@@ -1390,31 +1477,36 @@ export function parseDateStringToIso(raw: string): string | null {
     return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
   }
 
-  // 2. Month name format: Oct 20, 2026 or October 20, 2026 or 20 Oct 2026
-  const monthNameMatch = clean.match(/\b([A-Za-z]{3,9})\s+([0-9]{1,2}),?\s+(20[2-3][0-9])\b/i);
+  // 2. Month name format: Oct 20, 2026 or October 20, 2026 or 20 Oct 2026 or Oct 20,2026
+  const monthNameMatch = clean.match(/\b([A-Za-z]{3,9})\s+([0-9]{1,2}),?\s*(20[2-3][0-9]|[2-3][0-9])\b/i);
   if (monthNameMatch) {
     const m = months[monthNameMatch[1].toLowerCase()];
     if (m) {
       const d = monthNameMatch[2].padStart(2, '0');
-      return `${monthNameMatch[3]}-${m}-${d}`;
+      let yr = monthNameMatch[3];
+      if (yr.length === 2) yr = '20' + yr;
+      return `${yr}-${m}-${d}`;
     }
   }
 
-  const dMonthMatch = clean.match(/\b([0-9]{1,2})[-/\s]+([A-Za-z]{3,9})[-/\s]+(20[2-3][0-9])\b/i);
+  const dMonthMatch = clean.match(/\b([0-9]{1,2})[-/\s]+([A-Za-z]{3,9})[,/\s-]+(20[2-3][0-9]|[2-3][0-9])\b/i);
   if (dMonthMatch) {
     const m = months[dMonthMatch[2].toLowerCase()];
     if (m) {
       const d = dMonthMatch[1].padStart(2, '0');
-      return `${dMonthMatch[3]}-${m}-${d}`;
+      let yr = dMonthMatch[3];
+      if (yr.length === 2) yr = '20' + yr;
+      return `${yr}-${m}-${d}`;
     }
   }
 
-  // 3. Slash / hyphen formats: DD/MM/YYYY or MM/DD/YYYY
-  const slashMatch = clean.match(/\b([0-9]{1,2})[-/.]([0-9]{1,2})[-/.](20[2-3][0-9])\b/);
+  // 3. Slash / hyphen formats: DD/MM/YYYY or MM/DD/YYYY or DD/MM/YY
+  const slashMatch = clean.match(/\b([0-9]{1,2})[-/.]([0-9]{1,2})[-/.](20[2-3][0-9]|[2-3][0-9])\b/);
   if (slashMatch) {
     const n1 = parseInt(slashMatch[1], 10);
     const n2 = parseInt(slashMatch[2], 10);
-    const year = slashMatch[3];
+    let year = slashMatch[3];
+    if (year.length === 2) year = '20' + year;
 
     // If first number > 12, it must be DD/MM/YYYY
     if (n1 > 12 && n2 <= 12) {
