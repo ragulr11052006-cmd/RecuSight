@@ -529,6 +529,189 @@ export function extractLineItemService(text: string, merchantName: string): stri
   return `${merchantName} Subscription`;
 }
 
+// =========================================================================
+// UNIVERSAL MERCHANT VALIDATION & DOCUMENT TERM BLOCKLIST
+// =========================================================================
+
+export const GENERIC_DOCUMENT_TERMS: readonly string[] = [
+  'details',
+  'recipient details',
+  'recipient',
+  'receiver details',
+  'receiver',
+  'buyer details',
+  'buyer',
+  'customer details',
+  'customer',
+  'client details',
+  'client',
+  'consignee details',
+  'consignee',
+  'billed to',
+  'bill to',
+  'billed to details',
+  'shipped to',
+  'ship to',
+  'shipped to details',
+  'billing information',
+  'billing info',
+  'billing details',
+  'billing address',
+  'shipping address',
+  'shipping information',
+  'payment details',
+  'payment information',
+  'payment method',
+  'payment mode',
+  'payment receipt',
+  'bank details',
+  'bank information',
+  'account details',
+  'invoice details',
+  'invoice summary',
+  'order details',
+  'order summary',
+  'tax invoice',
+  'tax details',
+  'original for recipient',
+  'duplicate for transporter',
+  'triplicate for supplier',
+  'authorized signatory',
+  'authorised signatory',
+  'signature',
+  'declaration',
+  'terms and conditions',
+  'terms & conditions',
+  'particulars',
+  'description of goods',
+  'description of service',
+  'line items',
+  'item description',
+  'item details',
+  'invoice verified',
+  'doc ai verified',
+  'doc ai review',
+  'subscription service',
+  'unconfirmed estimate',
+  'unidentified provider',
+  'place of supply',
+  'state code',
+  'hsn code',
+  'sac code',
+  'hsn/sac',
+  'pan number',
+  'gstin number',
+  'cin number',
+  'lut number',
+  'irn number',
+  'tax invoice copy',
+  'e-way bill',
+  'cash receipt',
+  'voucher',
+  'credit note',
+  'debit note',
+  'subtotal',
+  'grand total',
+  'total amount',
+  'tax total',
+  'cgst',
+  'sgst',
+  'igst',
+  'utgst',
+];
+
+const GENERIC_KEYWORD_SET = new Set([
+  'details', 'recipient', 'receiver', 'customer', 'client', 'buyer', 'consignee',
+  'billed', 'bill', 'shipped', 'ship', 'invoice', 'receipt', 'statement',
+  'summary', 'information', 'info', 'payment', 'method', 'bank', 'account',
+  'particulars', 'description', 'items', 'item', 'signatory', 'signature',
+  'declaration', 'terms', 'conditions', 'subtotal', 'total', 'amount', 'tax',
+  'verified', 'estimate', 'unidentified', 'unknown', 'document', 'page', 'date'
+]);
+
+/**
+ * Validates that a string represents an authentic merchant or company,
+ * rejecting document structure headings, field labels, customer names, or codes.
+ */
+export function isValidMerchantName(name: string | null | undefined): boolean {
+  if (!name || typeof name !== 'string') return false;
+  const trimmed = name.trim();
+  if (trimmed.length < 2 || trimmed.length > 60) return false;
+
+  // Must contain letters
+  if (!/[a-zA-Z]{2,}/.test(trimmed)) return false;
+
+  // Cannot be an email or URL
+  if (trimmed.includes('@') || /https?:\/\/|www\./i.test(trimmed)) return false;
+
+  // Cannot be a registration/tax code or transaction ID
+  if (/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/i.test(trimmed)) return false; // GSTIN
+  if (/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/i.test(trimmed)) return false; // PAN
+  if (/^[LU][0-9]{5}[A-Z]{2}[0-9]{4}[A-Z]{3}[0-9]{6}$/i.test(trimmed)) return false; // CIN
+  if (/^(?:txn|ref|inv|cin|gstin|pan|po|order)[-_\s0-9]{4,}/i.test(trimmed)) return false;
+
+  const normalized = trimmed
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // Check exact match to any known generic term
+  for (const term of GENERIC_DOCUMENT_TERMS) {
+    if (normalized === term) return false;
+  }
+
+  // Check if starts with a generic section prefix
+  const genericPrefixes = [
+    'details', 'recipient', 'receiver', 'customer', 'client', 'buyer', 'consignee',
+    'billed to', 'bill to', 'shipped to', 'ship to', 'invoice details', 'payment details',
+    'tax invoice', 'original for', 'duplicate for', 'authorized signatory', 'terms and conditions',
+    'particulars', 'description of', 'order summary', 'gstin', 'pan number'
+  ];
+  for (const p of genericPrefixes) {
+    if (normalized === p || normalized.startsWith(p + ' ')) {
+      return false;
+    }
+  }
+
+  // Check if every word in the candidate is a generic document keyword (e.g. "Details Recipient Details")
+  const words = normalized.split(/\s+/).filter(Boolean);
+  if (words.length > 0 && words.every((w) => GENERIC_KEYWORD_SET.has(w))) {
+    return false;
+  }
+
+  return true;
+}
+
+export function cleanMerchantCandidate(str: string): string | null {
+  if (!str) return null;
+  if (/\b(?:producer|creator|author|title|subject|keywords|library|indesign|distiller|acrobat\s*distiller|generator|software\s*version|xmp)\b/i.test(str)) {
+    return null;
+  }
+  const stripped = str
+    .replace(/["'#*<>~@!?^&+=/\\|~`%$;:]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!isValidMerchantName(stripped)) {
+    return null;
+  }
+
+  // Remove corporate suffixes for the clean canonical candidate name
+  const clean = stripped
+    .replace(/\b(?:pvt\.?\s*ltd\.?|private\s*limited|pte\.?\s*ltd\.?|ltd\.?|limited|inc\.?|incorporated|corp\.?|corporation|llc|llp|gmbh|co\.)\b\.?/gi, '')
+    .trim();
+
+  if (!clean || !isValidMerchantName(clean)) {
+    return null;
+  }
+
+  return clean
+    .split(/\s+/)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+}
+
 /**
  * Identifies the authentic merchant from document evidence.
  * Structure-first extraction that works universally across any company.
@@ -545,7 +728,7 @@ export function identifyMerchant(
 
   // 1. Explicit labeled issuer / seller / vendor in invoice text
   const labeledVendorRegex = [
-    /(?:billed\s*by|sold\s*by|seller\s*name|provider\s*name|company\s*name|merchant\s*name|service\s*provider|supplier|issued\s*by|payee)[:\s]+([^\r\n,;]+)/i,
+    /(?:billed\s*by|sold\s*by|seller\s*name|provider\s*name|company\s*name|merchant\s*name|service\s*provider|supplier\s*name|supplier|issued\s*by|payee)[:\s]+([^\r\n,;]+)/i,
     /(?:invoice\s*from|receipt\s*from|payment\s*to|subscription\s*to)[:\s]+([^\r\n,;]+)/i,
     /(?:thank\s*you\s*for\s*(?:your\s*)?(?:business\s*with|subscribing\s*to|payment\s*to))[:\s]+([^\r\n,;!.]+)/i,
   ];
@@ -554,7 +737,7 @@ export function identifyMerchant(
     const match = cleanDoc.match(regex);
     if (match && match[1]) {
       const candidate = cleanMerchantCandidate(match[1]);
-      if (candidate) {
+      if (candidate && isValidMerchantName(candidate)) {
         const canonical = getCanonicalMerchantName(candidate);
         const service = extractLineItemService(cleanDoc, canonical);
         return {
@@ -617,13 +800,13 @@ export function identifyMerchant(
 
   // 3a. Corporate legal entity in header lines (Inc, LLC, LLP, Ltd, GmbH, Company, Corp, etc.)
   for (const line of headerLines) {
-    if (/^(?:invoice|tax\s*invoice|bill\s*to|ship\s*to|customer|client|order|p\.?o\.?|date|statement|receipt|gstin|pan|cin)\b/i.test(line)) {
+    if (/^(?:invoice|tax\s*invoice|bill\s*to|ship\s*to|customer|client|recipient|receiver|buyer|order|p\.?o\.?|date|statement|receipt|gstin|pan|cin|details)\b/i.test(line)) {
       continue;
     }
     const corpMatch = line.match(/^([A-Za-z0-9\s&.,'-]+?\b(?:inc\.?|llc|llp|ltd\.?|limited|corp\.?|corporation|gmbh|company|co\.?|pvt\.?\s*ltd\.?|pte\.?\s*ltd\.?|b\.?v\.?|s\.?a\.?|plc|technologies|software|entertainment|services))\b/i);
     if (corpMatch && corpMatch[1]) {
       const candidate = cleanMerchantCandidate(corpMatch[1]);
-      if (candidate) {
+      if (candidate && isValidMerchantName(candidate)) {
         const canonical = getCanonicalMerchantName(candidate);
         const service = extractLineItemService(cleanDoc, canonical);
         return {
@@ -654,35 +837,41 @@ export function identifyMerchant(
     const isExcluded = /^(?:google|apple|microsoft|stripe|razorpay|fastspring|paddle|paypal|adobe|gmail|yahoo|hotmail|outlook|icloud|proton|live|msn|rediff|zoho|mail|ymail|aol)$/i.test(domainPart);
     if (!isExcluded) {
       const canonical = getCanonicalMerchantName(domainPart);
-      const service = extractLineItemService(cleanDoc, canonical);
-      return {
-        merchantName: {
-          value: canonical,
-          evidenceText: explicitUrlMatch[0],
-          page: 1,
-          confidence: 90,
-          status: 'high',
-        },
-        serviceName: {
-          value: service,
-          evidenceText: explicitUrlMatch[0],
-          page: 1,
-          confidence: 82,
-          status: 'high',
-        },
-        category: detectCategory(cleanDoc + ' ' + canonical + ' ' + service),
-      };
+      if (isValidMerchantName(canonical)) {
+        const service = extractLineItemService(cleanDoc, canonical);
+        return {
+          merchantName: {
+            value: canonical,
+            evidenceText: explicitUrlMatch[0],
+            page: 1,
+            confidence: 90,
+            status: 'high',
+          },
+          serviceName: {
+            value: service,
+            evidenceText: explicitUrlMatch[0],
+            page: 1,
+            confidence: 82,
+            status: 'high',
+          },
+          category: detectCategory(cleanDoc + ' ' + canonical + ' ' + service),
+        };
+      }
     }
   }
 
-  // 5. Header line without generic words
+  // 5. Header line without generic words (strictly checked against generic document terms)
   for (const line of headerLines) {
-    if (/^(?:invoice|tax\s*invoice|bill|receipt|statement|original|duplicate|gstin|cin|date|bill\s*to|ship\s*to|customer|order|p\.?o\.?|page\s*\d)/i.test(line)) {
+    if (/^(?:invoice|tax\s*invoice|bill|receipt|statement|original|duplicate|gstin|cin|date|bill\s*to|ship\s*to|customer|recipient|receiver|client|buyer|order|details|p\.?o\.?|page\s*\d)/i.test(line)) {
+      continue;
+    }
+    // Block any line containing generic headings like "details", "recipient", "receiver", etc.
+    if (/\b(?:details|recipient|receiver|customer|client|consignee|signatory|particulars|declaration|terms)\b/i.test(line)) {
       continue;
     }
     if (line.length >= 3 && line.length <= 45 && !/[0-9]{3,}/.test(line)) {
       const candidate = cleanMerchantCandidate(line);
-      if (candidate) {
+      if (candidate && isValidMerchantName(candidate)) {
         const canonical = getCanonicalMerchantName(candidate);
         const service = extractLineItemService(cleanDoc, canonical);
         return {
@@ -690,14 +879,14 @@ export function identifyMerchant(
             value: canonical,
             evidenceText: line,
             page: 1,
-            confidence: 85,
+            confidence: 75,
             status: 'medium',
           },
           serviceName: {
             value: service,
             evidenceText: line,
             page: 1,
-            confidence: 75,
+            confidence: 70,
             status: 'medium',
           },
           category: detectCategory(cleanDoc + ' ' + canonical + ' ' + service),
@@ -706,7 +895,7 @@ export function identifyMerchant(
     }
   }
 
-  // 5. Filename candidate fallback
+  // 6. Filename candidate fallback
   const cleanFilename = filename
     .replace(/\.[^/.]+$/, '')
     .replace(/[_\-+]/g, ' ')
@@ -718,24 +907,26 @@ export function identifyMerchant(
       .split(/\s+/)
       .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
       .join(' ');
-    const canonical = getCanonicalMerchantName(formatted);
-    return {
-      merchantName: {
-        value: canonical,
-        evidenceText: `Filename: ${filename}`,
-        page: 1,
-        confidence: 65,
-        status: 'low',
-      },
-      serviceName: {
-        value: `${canonical} Subscription`,
-        evidenceText: `Filename: ${filename}`,
-        page: 1,
-        confidence: 60,
-        status: 'low',
-      },
-      category: detectCategory(cleanDoc + ' ' + canonical),
-    };
+    if (isValidMerchantName(formatted)) {
+      const canonical = getCanonicalMerchantName(formatted);
+      return {
+        merchantName: {
+          value: canonical,
+          evidenceText: `Filename: ${filename}`,
+          page: 1,
+          confidence: 50,
+          status: 'low',
+        },
+        serviceName: {
+          value: `${canonical} Subscription`,
+          evidenceText: `Filename: ${filename}`,
+          page: 1,
+          confidence: 50,
+          status: 'low',
+        },
+        category: detectCategory(cleanDoc + ' ' + canonical),
+      };
+    }
   }
 
   return {
@@ -743,25 +934,6 @@ export function identifyMerchant(
     serviceName: { value: null, evidenceText: null, page: 1, confidence: 0, status: 'missing' },
     category: 'Software & Tools',
   };
-}
-
-function cleanMerchantCandidate(str: string): string | null {
-  if (/\b(?:producer|creator|author|title|subject|keywords|library|indesign|distiller|acrobat\s*distiller|generator|software\s*version|xmp)\b/i.test(str)) {
-    return null;
-  }
-  const clean = str
-    .replace(/["'#*<>~@!?^&+=/\\|~`%$;:]+/g, '')
-    .replace(/\b(?:ltd|pvt|limited|inc|corp|corporation|llc|gmbh|co\.)\b\.?/gi, '')
-    .trim();
-  if (clean.length < 2 || clean.length > 50) return null;
-  if (!/[a-zA-Z]{2,}/.test(clean)) return null;
-  if (/^(?:date|total|amount|invoice|receipt|statement|tax|gstin|pan|order|subtotal|bill|usd|inr|eur|gbp)$/i.test(clean)) {
-    return null;
-  }
-  return clean
-    .split(/\s+/)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ');
 }
 
 function detectCategory(text: string): SubscriptionCategory {
@@ -851,6 +1023,12 @@ export function extractTotalAmountAndCurrency(
     const trimmed = lines[i].trim();
     if (!trimmed) continue;
 
+    // Skip table header column rows (e.g. "Item Description HSN/SAC Taxable Value IGST 18% Total")
+    const isTableHeaderLine = /\b(?:item\s*description|description|hsn|sac|qty|quantity|unit\s*price|rate|service\s*period|igst\s*%|cgst\s*%|sgst\s*%|tax\s*%)\b/i.test(trimmed);
+    if (isTableHeaderLine) {
+      continue;
+    }
+
     // Subtotal
     if (!extractedSubtotal) {
       const sm = trimmed.match(subtotalRegex);
@@ -868,18 +1046,21 @@ export function extractTotalAmountAndCurrency(
     if (tm && tm[2]) {
       let val = parseMonetaryValue(tm[2]);
       if (val && val > 0 && !isLikelyYearOrId(val, trimmed)) {
-        // Fix OCR dropped decimal points in taxes (e.g. 3036 instead of 30.36 when subtotal is 168.64)
-        if (val > 1000 && extractedSubtotal && val > extractedSubtotal && (val / 100) < extractedSubtotal) {
-          val = Math.round((val / 100) * 100) / 100;
-        }
+        // Skip tax percentage rates like "18%"
+        if (!trimmed.includes(`${tm[2]}%`) && !(val <= 30 && Number.isInteger(val) && /%/.test(trimmed))) {
+          // Fix OCR dropped decimal points in taxes (e.g. 3036 instead of 30.36 when subtotal is 168.64)
+          if (val > 1000 && extractedSubtotal && val > extractedSubtotal && (val / 100) < extractedSubtotal) {
+            val = Math.round((val / 100) * 100) / 100;
+          }
 
-        if (!extractedTax) {
-          extractedTax = val;
-          taxEvidence = trimmed;
-        } else if ((/\bcgst\b/i.test(trimmed) && /\bsgst\b/i.test(taxEvidence || '')) || (/\bsgst\b/i.test(trimmed) && /\bcgst\b/i.test(taxEvidence || ''))) {
-          // Accumulate split CGST + SGST components only
-          extractedTax = Math.round((extractedTax + val) * 100) / 100;
-          taxEvidence = `${taxEvidence} + ${trimmed}`;
+          if (!extractedTax) {
+            extractedTax = val;
+            taxEvidence = trimmed;
+          } else if ((/\bcgst\b/i.test(trimmed) && /\bsgst\b/i.test(taxEvidence || '')) || (/\bsgst\b/i.test(trimmed) && /\bcgst\b/i.test(taxEvidence || ''))) {
+            // Accumulate split CGST + SGST components only
+            extractedTax = Math.round((extractedTax + val) * 100) / 100;
+            taxEvidence = `${taxEvidence} + ${trimmed}`;
+          }
         }
       }
     }
@@ -896,24 +1077,89 @@ export function extractTotalAmountAndCurrency(
     // Only inspect remaining lines as potential Grand Total lines
     const isTotalCandidate = /(?:grand\s*total|gesamtbetrag|endbetrag|rechnungsbetrag|total\s*invoice\s*value|invoice\s*value|final\s*amount|total\s*amount|amount\s*paid|total\s*charged|total\s*paid|net\s*payable|total\s*payable|invoice\s*total|total\s*billed|amount\s*due|total\s*due|\btotal\b|\bpaid\b)/i.test(trimmed);
 
-    // Final Total check on current line
-    if (!extractedTotal) {
-      const tm = trimmed.match(primaryTotalRegex);
-      if (tm && tm[2]) {
-        const val = parseMonetaryValue(tm[2]);
-        if (val && val > 0 && !isLikelyYearOrId(val, trimmed)) {
-          extractedTotal = val;
-          totalEvidence = trimmed;
-          totalConfidence = 95;
-          detectedAmounts.push(val);
+    // Final Total check on current line (with multi-amount row disambiguation)
+    if (!extractedTotal && isTotalCandidate) {
+      // Find all numbers on the total candidate line, ignoring percentages like "18%"
+      const numPattern = /(?:([₹$€£]|inr|usd|eur|gbp|rs\.?)\s*)?([0-9]{1,3}(?:,[0-9]{2,3})+(?:\.[0-9]{1,2})?|[0-9]{1,3}(?:\.[0-9]{3})+(?:,[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?|[0-9]+(?:,[0-9]{1,2})?|[0-9]+)(?:\s*([₹$€£]|inr|usd|eur|gbp|\/-))?/gi;
+      const tokensOnLine: { val: number; raw: string; prefix?: string; suffix?: string }[] = [];
+      let nm: RegExpExecArray | null;
+      while ((nm = numPattern.exec(trimmed)) !== null) {
+        // Skip if immediately followed by %
+        const charAfter = trimmed.slice(nm.index + nm[0].length, nm.index + nm[0].length + 1);
+        if (charAfter === '%' || nm[0].includes('%')) continue;
 
-          const sym = ((tm[1] || tm[3] || '') + '').toLowerCase();
-          if (sym === '$' || sym === 'usd' || trimmed.includes('$')) explicitCurrency = 'USD';
-          else if (sym === '€' || sym === 'eur' || trimmed.includes('€')) explicitCurrency = 'EUR';
-          else if (sym === '£' || sym === 'gbp' || trimmed.includes('£')) explicitCurrency = 'GBP';
-          else if (sym === '₹' || sym.includes('rs') || sym === 'inr' || trimmed.includes('₹')) explicitCurrency = 'INR';
+        const val = parseMonetaryValue(nm[2]);
+        if (val !== null && val > 0 && !isLikelyYearOrId(val, trimmed)) {
+          tokensOnLine.push({
+            val,
+            raw: nm[2],
+            prefix: nm[1],
+            suffix: nm[3],
+          });
         }
-      } else if (isTotalCandidate && i + 1 < lines.length) {
+      }
+
+      if (tokensOnLine.length >= 2) {
+        // Multi-column summary line e.g. "Total 4,067.80 73220 INR 4,800.00"
+        // In tabular summaries, the final column (or the largest number, especially marked with currency)
+        // is the authentic Grand Total, while earlier columns are taxable subtotal and tax.
+        const lastToken = tokensOnLine[tokensOnLine.length - 1];
+        const firstToken = tokensOnLine[0];
+
+        // Check if OCR dropped decimal in middle tax token (e.g. 73220 -> 732.20)
+        let middleTax = tokensOnLine.length > 2 ? tokensOnLine[1].val : null;
+        if (middleTax !== null && middleTax > 1000 && (middleTax / 100) < lastToken.val) {
+          const adjustedTax = Math.round((middleTax / 100) * 100) / 100;
+          if (Math.abs((firstToken.val + adjustedTax) - lastToken.val) < 0.05) {
+            middleTax = adjustedTax;
+          }
+        }
+
+        // Determine Grand Total: if last token is highest or equals sum of earlier, select it
+        let chosenGrandTotal = lastToken.val;
+        if (lastToken.prefix || lastToken.suffix || lastToken.val >= firstToken.val) {
+          chosenGrandTotal = lastToken.val;
+        } else {
+          // If in reverse order, pick the max value
+          chosenGrandTotal = Math.max(...tokensOnLine.map((t) => t.val));
+        }
+
+        extractedTotal = chosenGrandTotal;
+        totalEvidence = trimmed;
+        totalConfidence = 98;
+        detectedAmounts.push(chosenGrandTotal);
+
+        // Assign earlier amounts to subtotal and tax if not already identified
+        if (!extractedSubtotal && firstToken.val < chosenGrandTotal) {
+          extractedSubtotal = firstToken.val;
+          subtotalEvidence = trimmed;
+        }
+        if (!extractedTax && middleTax !== null && middleTax < chosenGrandTotal) {
+          extractedTax = middleTax;
+          taxEvidence = trimmed;
+        } else if (!extractedTax && tokensOnLine.length === 2 && firstToken.val < chosenGrandTotal) {
+          extractedTax = Math.round((chosenGrandTotal - firstToken.val) * 100) / 100;
+        }
+
+        // Currency identification from line
+        if (/[$]|usd/i.test(trimmed)) explicitCurrency = 'USD';
+        else if (/[€]|eur/i.test(trimmed)) explicitCurrency = 'EUR';
+        else if (/[£]|gbp/i.test(trimmed)) explicitCurrency = 'GBP';
+        else if (/[₹]|inr|rs\.?/i.test(trimmed)) explicitCurrency = 'INR';
+      } else if (tokensOnLine.length === 1) {
+        // Standard single-amount total line e.g. "TOTAL ₹199"
+        const singleToken = tokensOnLine[0];
+        extractedTotal = singleToken.val;
+        totalEvidence = trimmed;
+        totalConfidence = 95;
+        detectedAmounts.push(singleToken.val);
+
+        const sym = ((singleToken.prefix || singleToken.suffix || '') + '').toLowerCase();
+        if (sym === '$' || sym === 'usd' || trimmed.includes('$')) explicitCurrency = 'USD';
+        else if (sym === '€' || sym === 'eur' || trimmed.includes('€')) explicitCurrency = 'EUR';
+        else if (sym === '£' || sym === 'gbp' || trimmed.includes('£')) explicitCurrency = 'GBP';
+        else if (sym === '₹' || sym.includes('rs') || sym === 'inr' || trimmed.includes('₹')) explicitCurrency = 'INR';
+      } else if (i + 1 < lines.length) {
         // Multi-line table support: Label on line i ("Total Amount Due:"), amount on line i + 1 ("$1,499.00")
         const nextLine = lines[i + 1].trim();
         const nextMatch = nextLine.match(/^([₹$€£]|inr|usd|eur|gbp|rs\.?)?\s*([0-9]{1,3}(?:,[0-9]{2,3})+(?:\.[0-9]{1,2})?|[0-9]{1,3}(?:\.[0-9]{3})+(?:,[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?|[0-9]+(?:,[0-9]{1,2})?|[0-9]+)\s*([₹$€£]|inr|usd|eur|gbp|\/-)?$/i);

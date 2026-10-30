@@ -1,6 +1,6 @@
 import { createWorker } from 'tesseract.js';
 import { SubscriptionCategory, Currency } from '../types';
-import { processInvoiceDocument, InvoiceExtractionResult, sanitizePdfExtractedText, identifyMerchant } from './invoiceExtractor';
+import { processInvoiceDocument, InvoiceExtractionResult, sanitizePdfExtractedText, identifyMerchant, isValidMerchantName, cleanMerchantCandidate } from './invoiceExtractor';
 
 export interface ParsedTransaction {
   merchantName: string;
@@ -429,24 +429,36 @@ export async function parseDocument(
         if (json.success && json.data) {
           const doc = json.data;
           const currency = (doc.currency as Currency) || userPreferredCurrency;
+          const hasValidMerchant = Boolean(doc.merchantName && isValidMerchantName(doc.merchantName));
+          const merchantName = hasValidMerchant ? doc.merchantName : '';
+          const confidence = doc.confidence !== undefined ? doc.confidence : (hasValidMerchant ? 85 : 40);
+          const amountStatus: 'verified' | 'uncertain' | 'not_found' =
+            doc.totalAmount === null || doc.totalAmount === undefined
+              ? 'not_found'
+              : (confidence >= 75 && hasValidMerchant ? 'verified' : 'uncertain');
+
           if (onProgress) onProgress('Google Cloud Document AI parsing complete!');
           return [
             {
-              merchantName: doc.merchantName,
-              rawString: `${doc.merchantName.toUpperCase().replace(/\s+/g, '_')}*DOC_AI_VERIFIED`,
-              amount: doc.totalAmount,
-              amountStatus: 'verified',
+              merchantName,
+              rawString: hasValidMerchant
+                ? `${merchantName.toUpperCase().replace(/\s+/g, '_')}*DOC_AI_VERIFIED`
+                : 'UNIDENTIFIED_PROVIDER*DOC_AI_REVIEW',
+              amount: doc.totalAmount ?? null,
+              amountStatus,
               currency,
-              date: doc.invoiceDate,
-              renewalDate: doc.renewalDate,
-              paymentSource: doc.paymentMethod,
-              cadence: doc.cadence || 'monthly',
-              category: detectCategoryFromText(doc.merchantName),
-              confidence: 99,
+              date: doc.invoiceDate ?? null,
+              renewalDate: doc.renewalDate ?? null,
+              paymentSource: doc.paymentMethod || undefined,
+              cadence: doc.cadence || 'unknown',
+              category: hasValidMerchant ? detectCategoryFromText(merchantName) : 'Software & Tools',
+              confidence,
               isDuplicate: false,
               isRecurring: true,
-              notes: 'Extracted via Google Cloud Document AI Invoice Parser',
-              detectedAmounts: [doc.totalAmount],
+              notes: !hasValidMerchant
+                ? 'Service provider could not be identified automatically by Document AI. Please confirm merchant name.'
+                : (doc.needsReview ? 'Please review extracted values before confirming.' : 'Extracted via Google Cloud Document AI Invoice Parser'),
+              detectedAmounts: doc.totalAmount ? [doc.totalAmount] : [],
               subtotal: doc.subtotal,
               taxAmount: doc.taxAmount,
             },
@@ -461,16 +473,13 @@ export async function parseDocument(
   // 2. Fallback to local production OCR engine
   const extraction = await processInvoiceDocument(file, onProgress, userPreferredCurrency);
 
-  const merchant = extraction.merchantName.value || 'Subscription Service';
-  // NEVER replace unknown price with 0: preserve null when missing
+  const hasValidMerchant = Boolean(extraction.merchantName.value && isValidMerchantName(extraction.merchantName.value));
+  const merchant = hasValidMerchant ? extraction.merchantName.value! : '';
   const amount = extraction.totalAmount.value; 
   const currency = extraction.currency.value || userPreferredCurrency;
-  // NEVER invent a renewal date: preserve null when not explicitly stated
   const renewalDate = extraction.renewalDate.value;
   const date = extraction.invoiceDate.value;
-  // Evidence-based payment source or null
   const paymentSource = extraction.paymentMethod.value;
-  // NEVER assume missing cadence is monthly: mark as 'unknown' if not evidenced
   const cadence: 'monthly' | 'yearly' | 'unknown' =
     extraction.billingFrequency.value === 'yearly'
       ? 'yearly'
@@ -478,31 +487,39 @@ export async function parseDocument(
       ? 'monthly'
       : 'unknown';
 
-  const confidence = Math.round(
-    ((extraction.merchantName.confidence || 0) + (extraction.totalAmount.confidence || 0)) / 2
-  );
+  const merchantConfidence = hasValidMerchant ? (extraction.merchantName.confidence || 75) : 0;
+  const amountConfidence = extraction.totalAmount.confidence || 0;
+  const confidence = hasValidMerchant
+    ? Math.round((merchantConfidence + amountConfidence) / 2)
+    : Math.min(45, amountConfidence > 0 ? Math.round(amountConfidence / 2) : 30);
 
   const amountStatus: 'verified' | 'uncertain' | 'not_found' =
     amount === null
       ? 'not_found'
-      : (extraction.totalAmount.confidence >= 85 ? 'verified' : 'uncertain');
+      : (confidence >= 75 && hasValidMerchant ? 'verified' : 'uncertain');
 
   const primaryTx: ParsedTransaction = {
     merchantName: merchant,
-    rawString: `${merchant.toUpperCase().replace(/\s+/g, '_')}*INVOICE_${extraction.invoiceNumber.value || 'VERIFIED'}`,
+    rawString: hasValidMerchant
+      ? `${merchant.toUpperCase().replace(/\s+/g, '_')}*INVOICE_${extraction.invoiceNumber.value || 'VERIFIED'}`
+      : (extraction.invoiceNumber.value ? `INVOICE_${extraction.invoiceNumber.value}` : 'UNIDENTIFIED_PROVIDER*INVOICE_REVIEW'),
     amount,
     amountStatus,
     currency,
     date,
     renewalDate,
-    paymentSource,
+    paymentSource: paymentSource || undefined,
     cadence,
-    category: extraction.serviceName.value ? detectCategoryFromText(extraction.serviceName.value + ' ' + merchant) : 'Software & Tools',
-    confidence: confidence > 0 ? confidence : 70,
+    category: hasValidMerchant && extraction.serviceName.value
+      ? detectCategoryFromText(extraction.serviceName.value + ' ' + merchant)
+      : (hasValidMerchant ? detectCategoryFromText(merchant) : 'Software & Tools'),
+    confidence,
     isDuplicate: false,
     duplicateMerchant: undefined,
     isRecurring: true,
-    notes: extraction.warnings.length > 0 ? extraction.warnings.join('; ') : 'Document parsed via verified OCR/text extraction',
+    notes: !hasValidMerchant
+      ? 'Service provider could not be identified from document. Please enter merchant name.'
+      : (extraction.warnings.length > 0 ? extraction.warnings.join('; ') : 'Document parsed via verified OCR/text extraction'),
     detectedAmounts: extraction.detectedAmounts,
     ocrSnippet: extraction.rawText ? extraction.rawText.slice(0, 180) : file.name,
     invoiceNumber: extraction.invoiceNumber.value || undefined,
@@ -513,8 +530,6 @@ export async function parseDocument(
     amountEvidence: extraction.totalAmount.evidenceText,
     merchantEvidence: extraction.merchantName.evidenceText,
   };
-
-  return [primaryTx];
 
   return [primaryTx];
 }
@@ -823,18 +838,21 @@ export function extractMerchantNameFromText(
   // 4. Prominent header lines in first 5 lines of text
   const lines = text.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 2);
   for (const line of lines.slice(0, 5)) {
-    // Skip common document title words
-    if (/^(?:invoice|tax\s*invoice|bill|receipt|statement|original|duplicate|gstin|cin|date|bill\s*to|ship\s*to|customer|order)/i.test(line)) {
+    // Skip common document title words and generic section headers
+    if (/^(?:invoice|tax\s*invoice|bill|receipt|statement|original|duplicate|gstin|cin|date|bill\s*to|ship\s*to|customer|recipient|receiver|order|details)/i.test(line)) {
+      continue;
+    }
+    if (/\b(?:details|recipient|receiver|customer|client|consignee|signatory|particulars|declaration|terms)\b/i.test(line)) {
       continue;
     }
     // Line has no numbers or dates and reasonable length
-    if (line.length >= 3 && line.length <= 35 && !/[0-9]{3,}/.test(line)) {
+    if (line.length >= 3 && line.length <= 40 && !/[0-9]{3,}/.test(line)) {
       const candidate = cleanMerchantCandidate(line);
-      if (candidate) {
+      if (candidate && isValidMerchantName(candidate)) {
         return {
           name: candidate,
           category: detectCategoryFromText(text + ' ' + candidate),
-          confidence: 78,
+          confidence: 75,
         };
       }
     }
@@ -844,39 +862,28 @@ export function extractMerchantNameFromText(
   const cleanFilename = filename
     .replace(/\.[^/.]+$/, '')
     .replace(/[_\-+]/g, ' ')
-    .replace(/statement|invoice|receipt|tax|bill|oct|nov|dec|jan|202[4-9]|pdf|png|jpg|jpeg/gi, '')
+    .replace(/statement|invoice|receipt|tax|bill|oct|nov|dec|jan|202[4-9]|pdf|png|jpg|jpeg|screenshot|upload|doc/gi, '')
     .trim();
 
-  if (cleanFilename.length >= 2) {
+  if (cleanFilename.length >= 2 && /[a-zA-Z]{2,}/.test(cleanFilename)) {
     const formatted = cleanFilename
       .split(/\s+/)
       .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
       .join(' ');
-    return {
-      name: formatted,
-      category: detectCategoryFromText(text + ' ' + formatted),
-      confidence: 72,
-    };
+    if (isValidMerchantName(formatted)) {
+      return {
+        name: formatted,
+        category: detectCategoryFromText(text + ' ' + formatted),
+        confidence: 60,
+      };
+    }
   }
 
   return {
-    name: 'Subscription Service',
+    name: '',
     category: 'Software & Tools',
-    confidence: 60,
+    confidence: 30,
   };
-}
-
-function cleanMerchantCandidate(str: string): string | null {
-  const clean = str
-    .replace(/["'#*]+/g, '')
-    .replace(/\b(?:ltd|pvt|limited|inc|corp|corporation|llc|gmbh|co\.)\b\.?/gi, '')
-    .trim();
-  if (clean.length < 2 || clean.length > 40) return null;
-  // Ignore if it's purely digits or words like "Invoice Date", "Total", etc.
-  if (/^(?:date|total|amount|invoice|receipt|statement|tax|gstin|pan|order|subtotal|bill|usd|inr|eur|gbp)$/i.test(clean)) {
-    return null;
-  }
-  return clean.split(/\s+/).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 }
 
 export function detectCategoryFromText(text: string): SubscriptionCategory {
@@ -935,32 +942,51 @@ export function extractTransactionsFromText(
   // Pass 1: Scan line by line for an explicit Final Total line, skipping lines that contain "subtotal" or "tax"
   for (const line of lines) {
     const trimmed = line.trim();
-    // Skip intermediate lines (Subtotal, GST, Tax, Discount)
-    if (/subtotal|sub-total|sub\s+total|discount|tax\b|gst\b|vat\b|cgst|sgst|fee\b|convenience|balance\s*due/i.test(trimmed)) {
+    // Skip intermediate lines (Subtotal, GST, Tax, Discount) and table column headers
+    if (/^(?:subtotal|sub-total|sub\s+total|discount|tax\b|gst\b|vat\b|cgst|sgst|fee\b|convenience|balance\s*due)/i.test(trimmed)) {
       continue;
     }
-    const match = trimmed.match(finalTotalRegex);
-    if (match && match[2]) {
-      const val = parseFloat(match[2].replace(/,/g, ''));
+    if (/\b(?:item\s*description|description|hsn|sac|qty|quantity|unit\s*price|rate|service\s*period|igst\s*%|cgst\s*%|sgst\s*%|tax\s*%)\b/i.test(trimmed)) {
+      continue;
+    }
+    const isTotalCandidate = /(?:grand\s*total|total\s*amount\s*(?:due|paid|charged|payable)?|total\s*payable|net\s*payable|amount\s*paid|amount\s*due|final\s*total|invoice\s*total|total\s*charged|total\s*billed|total\s*[:=]|total\s+amt|\btotal\b|\bpaid\b)/i.test(trimmed);
+    if (!isTotalCandidate) continue;
+
+    // Scan all numeric amounts on this total line (ignoring percentages)
+    const numScanner = /(?:([₹$€£]|inr|usd|eur|gbp|rs\.?)\s*)?([0-9]{1,3}(?:,[0-9]{2,3})*(?:\.[0-9]{1,2})?|[0-9]{2,6})/gi;
+    const tokens: { val: number; sym?: string }[] = [];
+    let nm: RegExpExecArray | null;
+    while ((nm = numScanner.exec(trimmed)) !== null) {
+      const charAfter = trimmed.slice(nm.index + nm[0].length, nm.index + nm[0].length + 1);
+      if (charAfter === '%' || nm[0].includes('%')) continue;
+
+      const val = parseFloat(nm[2].replace(/,/g, ''));
       if (val && !isNaN(val) && val > 0 && !(val >= 2020 && val <= 2030 && Number.isInteger(val))) {
-        finalTotalAmount = val;
-        if (match[1]) {
-          const sym = match[1].toLowerCase();
-          if (sym === '$' || sym === 'usd') explicitSymbolCurrency = 'USD';
-          else if (sym === '€' || sym === 'eur') explicitSymbolCurrency = 'EUR';
-          else if (sym === '£' || sym === 'gbp') explicitSymbolCurrency = 'GBP';
-          else if (sym === '₹' || sym.includes('rs') || sym === 'inr') explicitSymbolCurrency = 'INR';
-        } else if (trimmed.includes('$')) {
-          explicitSymbolCurrency = 'USD';
-        } else if (trimmed.includes('€')) {
-          explicitSymbolCurrency = 'EUR';
-        } else if (trimmed.includes('£')) {
-          explicitSymbolCurrency = 'GBP';
-        } else if (trimmed.includes('₹')) {
-          explicitSymbolCurrency = 'INR';
-        }
-        break;
+        tokens.push({ val, sym: nm[1] });
       }
+    }
+
+    if (tokens.length >= 2) {
+      // Multiple columns e.g. "Total 4,067.80 73220 INR 4,800.00"
+      // Rightmost column or explicit currency-tagged value is the true gross payable total
+      const last = tokens[tokens.length - 1];
+      const first = tokens[0];
+      const chosen = (last.sym || last.val >= first.val) ? last : tokens.reduce((max, t) => t.val > max.val ? t : max, tokens[0]);
+      finalTotalAmount = chosen.val;
+
+      if (chosen.sym || trimmed.includes('₹') || /inr|rs/i.test(trimmed)) explicitSymbolCurrency = 'INR';
+      else if (chosen.sym === '$' || trimmed.includes('$')) explicitSymbolCurrency = 'USD';
+      else if (chosen.sym === '€' || trimmed.includes('€')) explicitSymbolCurrency = 'EUR';
+      else if (chosen.sym === '£' || trimmed.includes('£')) explicitSymbolCurrency = 'GBP';
+      break;
+    } else if (tokens.length === 1) {
+      finalTotalAmount = tokens[0].val;
+      const sym = (tokens[0].sym || '').toLowerCase();
+      if (sym === '$' || sym === 'usd' || trimmed.includes('$')) explicitSymbolCurrency = 'USD';
+      else if (sym === '€' || sym === 'eur' || trimmed.includes('€')) explicitSymbolCurrency = 'EUR';
+      else if (sym === '£' || sym === 'gbp' || trimmed.includes('£')) explicitSymbolCurrency = 'GBP';
+      else if (sym === '₹' || sym.includes('rs') || sym === 'inr' || trimmed.includes('₹')) explicitSymbolCurrency = 'INR';
+      break;
     }
   }
 
@@ -1077,13 +1103,14 @@ export function extractTransactionsFromText(
 
   let chosenMerchant = identifiedName;
   let chosenCategory: SubscriptionCategory = identified.category;
-  let chosenConfidence = amt !== null ? 95 : 80;
+  let chosenConfidence = identified.merchantName.confidence || 0;
 
   if (!chosenMerchant) {
     for (const m of KNOWN_MERCHANTS) {
       if (m.patterns.some((p) => p.test(text) || p.test(filename))) {
         chosenMerchant = m.name;
         chosenCategory = m.category;
+        chosenConfidence = 96;
         break;
       }
     }
@@ -1091,23 +1118,33 @@ export function extractTransactionsFromText(
 
   if (!chosenMerchant) {
     const extractedMerchant = extractMerchantNameFromText(text, filename);
-    chosenMerchant = extractedMerchant.name;
-    chosenCategory = extractedMerchant.category;
-    chosenConfidence = amt !== null ? extractedMerchant.confidence : 70;
+    if (extractedMerchant.name && isValidMerchantName(extractedMerchant.name)) {
+      chosenMerchant = extractedMerchant.name;
+      chosenCategory = extractedMerchant.category;
+      chosenConfidence = extractedMerchant.confidence;
+    }
   }
 
+  const hasMerchant = Boolean(chosenMerchant && isValidMerchantName(chosenMerchant));
+  const finalMerchant = hasMerchant ? chosenMerchant! : '';
+  const finalConfidence = hasMerchant
+    ? Math.round((chosenConfidence + (amt !== null ? 95 : 70)) / 2)
+    : Math.min(45, amt !== null ? 50 : 30);
+
   const primaryCandidate: ParsedTransaction = {
-    merchantName: chosenMerchant,
-    rawString: `${chosenMerchant.toUpperCase().replace(/\s+/g, '_')}*INVOICE_BILLING`,
+    merchantName: finalMerchant,
+    rawString: hasMerchant
+      ? `${finalMerchant.toUpperCase().replace(/\s+/g, '_')}*INVOICE_BILLING`
+      : 'UNIDENTIFIED_PROVIDER*INVOICE_BILLING',
     amount: amt,
-    amountStatus,
+    amountStatus: hasMerchant && amt !== null ? 'verified' : 'uncertain',
     currency: detectedCurrency,
     date: foundRenewalDate,
     renewalDate: foundRenewalDate,
     paymentSource: paymentSource || undefined,
     cadence: detectedCadence,
     category: chosenCategory,
-    confidence: chosenConfidence,
+    confidence: finalConfidence,
     isDuplicate: false,
     duplicateMerchant: undefined,
     isRecurring: true,
