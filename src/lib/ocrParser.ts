@@ -949,15 +949,22 @@ export function extractTransactionsFromText(
     if (/\b(?:item\s*description|description|hsn|sac|qty|quantity|unit\s*price|rate|service\s*period|igst\s*%|cgst\s*%|sgst\s*%|tax\s*%)\b/i.test(trimmed)) {
       continue;
     }
-    const isTotalCandidate = /(?:grand\s*total|total\s*amount\s*(?:due|paid|charged|payable)?|total\s*payable|net\s*payable|amount\s*paid|amount\s*due|final\s*total|invoice\s*total|total\s*charged|total\s*billed|total\s*[:=]|total\s+amt|\btotal\b|\bpaid\b)/i.test(trimmed);
+    // Skip payment dates and status stamps (e.g. "Paid On 10 Sept 2026", "Status PAID")
+    if (/\b(?:paid\s*on|payment\s*date|paid\s*date|invoice\s*date|status\s*[:\s]*paid)\b/i.test(trimmed)) {
+      continue;
+    }
+    const isTotalCandidate = /(?:grand\s*total|total\s*amount\s*(?:due|paid|charged|payable)?|total\s*payable|net\s*payable|amount\s*paid|paid\s*amount|amount\s*due|final\s*total|invoice\s*total|total\s*charged|total\s*billed|total\s*[:=]|total\s+amt|\btotal\b|paid\s*[:=])/i.test(trimmed);
     if (!isTotalCandidate) continue;
+
+    // Strip email addresses so digits inside email names are never captured
+    const lineWithoutEmails = trimmed.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, ' ');
 
     // Scan all numeric amounts on this total line (ignoring percentages)
     const numScanner = /(?:([₹$€£]|inr|usd|eur|gbp|rs\.?)\s*)?([0-9]{1,3}(?:,[0-9]{2,3})*(?:\.[0-9]{1,2})?|[0-9]{2,6})/gi;
     const tokens: { val: number; sym?: string }[] = [];
     let nm: RegExpExecArray | null;
-    while ((nm = numScanner.exec(trimmed)) !== null) {
-      const charAfter = trimmed.slice(nm.index + nm[0].length, nm.index + nm[0].length + 1);
+    while ((nm = numScanner.exec(lineWithoutEmails)) !== null) {
+      const charAfter = lineWithoutEmails.slice(nm.index + nm[0].length, nm.index + nm[0].length + 1);
       if (charAfter === '%' || nm[0].includes('%')) continue;
 
       const val = parseFloat(nm[2].replace(/,/g, ''));

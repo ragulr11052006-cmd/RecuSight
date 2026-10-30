@@ -1014,7 +1014,7 @@ export function extractTotalAmountAndCurrency(
   let explicitCurrency: Currency | null = null;
 
   // Regex targeting final totals, subtotals, and taxes
-  const primaryTotalRegex = /(?:grand\s*total|final\s*amount\s*(?:due|paid|charged|payable)?|total\s*amount\s*(?:due|paid|charged|payable)?|total\s*invoice\s*value|invoice\s*value|total\s*value|gesamtbetrag|endbetrag|rechnungsbetrag|montant\s*total|total\s*payable|net\s*payable|final\s*total|amount\s*paid|amount\s*due|total\s*charged|total\s*billed|invoice\s*total|total\s*pay[eé]|total\s*[:=]|total\s+amt|\btotal\b|\bpaid\b)(?:\s*\([^)]*\))?[:\s]*([₹$€£]|inr|usd|eur|gbp|rs\.?)?\s*([0-9]{1,3}(?:,[0-9]{2,3})+(?:\.[0-9]{1,2})?|[0-9]{1,3}(?:\.[0-9]{3})+(?:,[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?|[0-9]+(?:,[0-9]{1,2})?|[0-9]+)\s*([₹$€£]|inr|usd|eur|gbp|\/-)?/i;
+  const primaryTotalRegex = /(?:grand\s*total|final\s*amount\s*(?:due|paid|charged|payable)?|total\s*amount\s*(?:due|paid|charged|payable)?|total\s*invoice\s*value|invoice\s*value|total\s*value|gesamtbetrag|endbetrag|rechnungsbetrag|montant\s*total|total\s*payable|net\s*payable|final\s*total|amount\s*paid|paid\s*amount|amount\s*due|total\s*charged|total\s*billed|invoice\s*total|total\s*pay[eé]|total\s*[:=]|total\s+amt|\btotal\b|paid\s*[:=])(?:\s*\([^)]*\))?[:\s]*([₹$€£]|inr|usd|eur|gbp|rs\.?)?\s*([0-9]{1,3}(?:,[0-9]{2,3})+(?:\.[0-9]{1,2})?|[0-9]{1,3}(?:\.[0-9]{3})+(?:,[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?|[0-9]+(?:,[0-9]{1,2})?|[0-9]+)\s*([₹$€£]|inr|usd|eur|gbp|\/-)?/i;
   const subtotalRegex = /(?:subtotal|sub-total|sub\s+total|net\s*subtotal|net\s*amount|nettobetrag|zwischensumme|sous-total|base\s*imponible|taxable\s*value)[:\s]*([₹$€£]|inr|usd|eur|gbp|rs\.?)?\s*([0-9]{1,3}(?:,[0-9]{2,3})+(?:\.[0-9]{1,2})?|[0-9]{1,3}(?:\.[0-9]{3})+(?:,[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?|[0-9]+(?:,[0-9]{1,2})?|[0-9]+)\s*([₹$€£]|inr|usd|eur|gbp|\/-)?/i;
   const taxRegex = /(?:tax\s*total|total\s*tax|(?:total\s*)?tax|gst|igst|1gst|cgst\s*\+\s*sgst|cgst|sgst|vat|tva|ust|mwst|steuern?)(?:\s*(?:@|at)?\s*\(?[0-9]+%?\)?|\s*\([^)]*\))?[:\s]*([₹$€£]|inr|usd|eur|gbp|rs\.?)?\s*([0-9]{1,3}(?:,[0-9]{2,3})+(?:\.[0-9]{1,2})?|[0-9]{1,3}(?:\.[0-9]{3})+(?:,[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?|[0-9]+(?:,[0-9]{1,2})?|[0-9]+)\s*([₹$€£]|inr|usd|eur|gbp|\/-)?/i;
 
@@ -1074,22 +1074,30 @@ export function extractTotalAmountAndCurrency(
       continue;
     }
 
+    // Skip payment dates and status stamps (e.g. "Paid On 10 Sept 2026", "Status PAID")
+    if (/\b(?:paid\s*on|payment\s*date|paid\s*date|invoice\s*date|status\s*[:\s]*paid)\b/i.test(trimmed)) {
+      continue;
+    }
+
     // Only inspect remaining lines as potential Grand Total lines
-    const isTotalCandidate = /(?:grand\s*total|gesamtbetrag|endbetrag|rechnungsbetrag|total\s*invoice\s*value|invoice\s*value|final\s*amount|total\s*amount|amount\s*paid|total\s*charged|total\s*paid|net\s*payable|total\s*payable|invoice\s*total|total\s*billed|amount\s*due|total\s*due|\btotal\b|\bpaid\b)/i.test(trimmed);
+    const isTotalCandidate = /(?:grand\s*total|gesamtbetrag|endbetrag|rechnungsbetrag|total\s*invoice\s*value|invoice\s*value|final\s*amount|total\s*amount|amount\s*paid|paid\s*amount|total\s*charged|total\s*paid|net\s*payable|total\s*payable|invoice\s*total|total\s*billed|amount\s*due|total\s*due|\btotal\b|paid\s*[:=])/i.test(trimmed);
 
     // Final Total check on current line (with multi-amount row disambiguation)
     if (!extractedTotal && isTotalCandidate) {
+      // Strip email addresses from the line so digits in emails (e.g. "38" in "chandrasekaran38@gmail.com") are never captured as amounts
+      const lineWithoutEmails = trimmed.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, ' ');
+
       // Find all numbers on the total candidate line, ignoring percentages like "18%"
       const numPattern = /(?:([₹$€£]|inr|usd|eur|gbp|rs\.?)\s*)?([0-9]{1,3}(?:,[0-9]{2,3})+(?:\.[0-9]{1,2})?|[0-9]{1,3}(?:\.[0-9]{3})+(?:,[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?|[0-9]+(?:,[0-9]{1,2})?|[0-9]+)(?:\s*([₹$€£]|inr|usd|eur|gbp|\/-))?/gi;
       const tokensOnLine: { val: number; raw: string; prefix?: string; suffix?: string }[] = [];
       let nm: RegExpExecArray | null;
-      while ((nm = numPattern.exec(trimmed)) !== null) {
+      while ((nm = numPattern.exec(lineWithoutEmails)) !== null) {
         // Skip if immediately followed by %
-        const charAfter = trimmed.slice(nm.index + nm[0].length, nm.index + nm[0].length + 1);
+        const charAfter = lineWithoutEmails.slice(nm.index + nm[0].length, nm.index + nm[0].length + 1);
         if (charAfter === '%' || nm[0].includes('%')) continue;
 
         const val = parseMonetaryValue(nm[2]);
-        if (val !== null && val > 0 && !isLikelyYearOrId(val, trimmed)) {
+        if (val !== null && val > 0 && !isLikelyYearOrId(val, lineWithoutEmails)) {
           tokensOnLine.push({
             val,
             raw: nm[2],
