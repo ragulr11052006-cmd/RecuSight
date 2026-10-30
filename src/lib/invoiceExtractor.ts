@@ -844,7 +844,7 @@ export function extractTotalAmountAndCurrency(
   // Regex targeting final totals, subtotals, and taxes
   const primaryTotalRegex = /(?:grand\s*total|final\s*amount\s*(?:due|paid|charged|payable)?|total\s*amount\s*(?:due|paid|charged|payable)?|total\s*invoice\s*value|invoice\s*value|total\s*value|gesamtbetrag|endbetrag|rechnungsbetrag|montant\s*total|total\s*payable|net\s*payable|final\s*total|amount\s*paid|amount\s*due|total\s*charged|total\s*billed|invoice\s*total|total\s*pay[eé]|total\s*[:=]|total\s+amt|\btotal\b|\bpaid\b)(?:\s*\([^)]*\))?[:\s]*([₹$€£]|inr|usd|eur|gbp|rs\.?)?\s*([0-9]{1,3}(?:,[0-9]{2,3})+(?:\.[0-9]{1,2})?|[0-9]{1,3}(?:\.[0-9]{3})+(?:,[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?|[0-9]+(?:,[0-9]{1,2})?|[0-9]+)\s*([₹$€£]|inr|usd|eur|gbp|\/-)?/i;
   const subtotalRegex = /(?:subtotal|sub-total|sub\s+total|net\s*subtotal|net\s*amount|nettobetrag|zwischensumme|sous-total|base\s*imponible|taxable\s*value)[:\s]*([₹$€£]|inr|usd|eur|gbp|rs\.?)?\s*([0-9]{1,3}(?:,[0-9]{2,3})+(?:\.[0-9]{1,2})?|[0-9]{1,3}(?:\.[0-9]{3})+(?:,[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?|[0-9]+(?:,[0-9]{1,2})?|[0-9]+)\s*([₹$€£]|inr|usd|eur|gbp|\/-)?/i;
-  const taxRegex = /(?:(?:total\s*)?tax|gst|igst|1gst|cgst\s*\+\s*sgst|cgst|sgst|vat|tva|ust|mwst|steuern?)(?:\s*(?:@|at)?\s*\(?[0-9]+%?\)?|\s*\([^)]*\))?[:\s]*([₹$€£]|inr|usd|eur|gbp|rs\.?)?\s*([0-9]{1,3}(?:,[0-9]{2,3})+(?:\.[0-9]{1,2})?|[0-9]{1,3}(?:\.[0-9]{3})+(?:,[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?|[0-9]+(?:,[0-9]{1,2})?|[0-9]+)\s*([₹$€£]|inr|usd|eur|gbp|\/-)?/i;
+  const taxRegex = /(?:tax\s*total|total\s*tax|(?:total\s*)?tax|gst|igst|1gst|cgst\s*\+\s*sgst|cgst|sgst|vat|tva|ust|mwst|steuern?)(?:\s*(?:@|at)?\s*\(?[0-9]+%?\)?|\s*\([^)]*\))?[:\s]*([₹$€£]|inr|usd|eur|gbp|rs\.?)?\s*([0-9]{1,3}(?:,[0-9]{2,3})+(?:\.[0-9]{1,2})?|[0-9]{1,3}(?:\.[0-9]{3})+(?:,[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?|[0-9]+(?:,[0-9]{1,2})?|[0-9]+)\s*([₹$€£]|inr|usd|eur|gbp|\/-)?/i;
 
   // Pass 1: Line-by-line inspection with primary total labels
   for (let i = 0; i < lines.length; i++) {
@@ -866,25 +866,35 @@ export function extractTotalAmountAndCurrency(
     // Tax (with split CGST + SGST accumulation)
     const tm = trimmed.match(taxRegex);
     if (tm && tm[2]) {
-      const val = parseMonetaryValue(tm[2]);
+      let val = parseMonetaryValue(tm[2]);
       if (val && val > 0 && !isLikelyYearOrId(val, trimmed)) {
+        // Fix OCR dropped decimal points in taxes (e.g. 3036 instead of 30.36 when subtotal is 168.64)
+        if (val > 1000 && extractedSubtotal && val > extractedSubtotal && (val / 100) < extractedSubtotal) {
+          val = Math.round((val / 100) * 100) / 100;
+        }
+
         if (!extractedTax) {
           extractedTax = val;
           taxEvidence = trimmed;
-        } else if (/cgst|sgst|vat|tax|gst/i.test(trimmed) && /cgst|sgst|vat|tax|gst/i.test(taxEvidence || '')) {
+        } else if ((/\bcgst\b/i.test(trimmed) && /\bsgst\b/i.test(taxEvidence || '')) || (/\bsgst\b/i.test(trimmed) && /\bcgst\b/i.test(taxEvidence || ''))) {
+          // Accumulate split CGST + SGST components only
           extractedTax = Math.round((extractedTax + val) * 100) / 100;
           taxEvidence = `${taxEvidence} + ${trimmed}`;
         }
       }
     }
 
-    // Only skip pure intermediate lines if NOT a grand total line
-    const isTotalCandidate = /(?:grand\s*total|gesamtbetrag|endbetrag|rechnungsbetrag|total\s*invoice\s*value|invoice\s*value|final\s*amount|total\s*amount|amount\s*paid|total\s*charged|total\s*paid|net\s*payable|total\s*payable|invoice\s*total|total\s*billed|amount\s*due|total\s*due|\btotal\b|\bpaid\b)/i.test(trimmed);
-    const isPureIntermediate = !isTotalCandidate && /^(?:subtotal|sub-total|sub\s+total|net\s*subtotal|discount|promo|coupon|convenience|balance\s*due|fee)\b/i.test(trimmed);
+    // STRICT CHECK: Tax lines, subtotal lines, and intermediate totals are NEVER the Grand Total!
+    // E.g. "TAX TOTAL ₹30.36" is the tax line, NOT the Grand Total "TOTAL ₹199"!
+    const isTaxOrSubtotalLine = /^(?:subtotal|sub-total|sub\s+total|net\s*subtotal|tax\s*total|total\s*tax|tax|igst|cgst|sgst|vat|taxable\s*value|discount|fee)\b/i.test(trimmed) ||
+      /\b(?:tax\s*total|total\s*tax|subtotal|sub-total|net\s*subtotal|tax\s*amount)\b/i.test(trimmed);
 
-    if (isPureIntermediate) {
+    if (isTaxOrSubtotalLine) {
       continue;
     }
+
+    // Only inspect remaining lines as potential Grand Total lines
+    const isTotalCandidate = /(?:grand\s*total|gesamtbetrag|endbetrag|rechnungsbetrag|total\s*invoice\s*value|invoice\s*value|final\s*amount|total\s*amount|amount\s*paid|total\s*charged|total\s*paid|net\s*payable|total\s*payable|invoice\s*total|total\s*billed|amount\s*due|total\s*due|\btotal\b|\bpaid\b)/i.test(trimmed);
 
     // Final Total check on current line
     if (!extractedTotal) {
@@ -965,22 +975,28 @@ export function extractTotalAmountAndCurrency(
 
   // Pass 2: Mathematical verification & Disambiguation of OCR-hallucinated Rupee symbol '2'
   if (extractedSubtotal !== null && extractedTax !== null && extractedTotal !== null) {
-    if (extractedSubtotal > 1000 && extractedTax > 100 && extractedTotal > 1000) {
-      const subStr = String(extractedSubtotal);
-      const taxStr = String(extractedTax);
-      const totStr = String(extractedTotal);
-      if (subStr.startsWith('2') && taxStr.startsWith('2') && totStr.startsWith('2')) {
-        const strippedSub = parseFloat(subStr.slice(1));
-        const strippedTax = parseFloat(taxStr.slice(1));
-        const strippedTot = parseFloat(totStr.slice(1));
-        if (Math.abs((strippedSub + strippedTax) - strippedTot) < 0.05) {
-          extractedSubtotal = strippedSub;
-          extractedTax = strippedTax;
-          extractedTotal = strippedTot;
-          explicitCurrency = 'INR';
-          totalEvidence = `Disambiguated OCR ₹: ${strippedSub} + ${strippedTax} = ${strippedTot}`;
-        }
+    const subVal = extractedSubtotal;
+    const taxVal = extractedTax;
+    const totVal = extractedTotal;
+
+    const subStr = String(subVal);
+    const taxStr = String(taxVal);
+    const totStr = String(totVal);
+
+    const isHallucinated2 = (subStr.startsWith('2') && subVal > 1000) || (taxStr.startsWith('2') && taxVal > 100) || (totStr.startsWith('2') && totVal > 1000);
+
+    const strippedSub = subStr.startsWith('2') && subVal > 1000 ? parseFloat(subStr.slice(1)) : subVal;
+    const strippedTax = taxStr.startsWith('2') && taxVal > 100 ? parseFloat(taxStr.slice(1)) : taxVal;
+    const strippedTot = totStr.startsWith('2') && totVal > 1000 ? parseFloat(totStr.slice(1)) : totVal;
+
+    if (Math.abs((strippedSub + strippedTax) - strippedTot) < 0.05) {
+      extractedSubtotal = strippedSub;
+      extractedTax = strippedTax;
+      extractedTotal = strippedTot;
+      if (isHallucinated2 && !explicitCurrency) {
+        explicitCurrency = 'INR';
       }
+      totalEvidence = `Disambiguated OCR ₹: ${strippedSub} + ${strippedTax} = ${strippedTot}`;
     }
   }
 
@@ -1000,11 +1016,16 @@ export function extractTotalAmountAndCurrency(
   // Pass 2: Mathematical verification if Subtotal and Tax were found
   if (extractedSubtotal !== null && extractedTax !== null) {
     const mathTotal = Math.round((extractedSubtotal + extractedTax) * 100) / 100;
-    if (extractedTotal === null) {
-      extractedTotal = mathTotal;
-      totalEvidence = `Calculated: Subtotal (${extractedSubtotal}) + Tax (${extractedTax}) = ${mathTotal}`;
-      totalConfidence = 90;
-      detectedAmounts.push(mathTotal);
+    // Invariant: Subtotal + Tax = Total. If total was null or misidentified (e.g. 3036 instead of 199), correct it!
+    if (extractedTotal === null || Math.abs(extractedTotal - mathTotal) > 0.05) {
+      const mathInt = Math.round(mathTotal);
+      const textHasMathTotal = text.includes(String(mathInt)) || detectedAmounts.includes(mathInt) || detectedAmounts.includes(mathTotal);
+      if (textHasMathTotal || extractedTotal === null || (extractedTotal > 1000 && mathTotal < 1000)) {
+        extractedTotal = mathTotal;
+        totalEvidence = `Mathematical Verification: Subtotal (${extractedSubtotal}) + Tax (${extractedTax}) = ${mathTotal}`;
+        totalConfidence = 98;
+        if (!detectedAmounts.includes(mathTotal)) detectedAmounts.push(mathTotal);
+      }
     }
   }
 
