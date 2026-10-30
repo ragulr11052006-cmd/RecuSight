@@ -256,7 +256,7 @@ export const AddSubscriptionPage: React.FC = () => {
       setFormCurrency(candCurrency);
       setFormCadence(activeCandidate.cadence || 'unknown');
       setFormRenewalDate(activeCandidate.renewalDate || '');
-      setFormUnconfirmedEstimate(activeCandidate.confidence < 80 || activeCandidate.amount === null);
+      setFormUnconfirmedEstimate(activeCandidate.confidence < 80 || activeCandidate.amount === null || !activeCandidate.merchantName);
       setFormPaymentSourceId(activeCandidate.paymentSource || '');
     }
   }, [selectedCandidateIndex, candidates]);
@@ -343,7 +343,7 @@ export const AddSubscriptionPage: React.FC = () => {
           setFormCadence(primaryCand.cadence || 'unknown');
           setFormRenewalDate(primaryCand.renewalDate || '');
           setFormPaymentSourceId(primaryCand.paymentSource || '');
-          setFormUnconfirmedEstimate(primaryCand.confidence < 80 || primaryCand.amount === null);
+          setFormUnconfirmedEstimate(primaryCand.confidence < 80 || primaryCand.amount === null || !primaryCand.merchantName);
         }
       } else {
         const cleanName = uploadedFile.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
@@ -843,7 +843,7 @@ export const AddSubscriptionPage: React.FC = () => {
                             <MerchantLogo name={cand.merchantName} size="md" />
                             <div>
                               <h4 className="text-xs font-bold text-slate-900 dark:text-white">
-                                {cand.merchantName}
+                                {cand.merchantName || 'Unconfirmed Provider (Click to enter)'}
                               </h4>
                               <span className="text-[11px] text-slate-400 block mt-0.5">
                                 Post Date: {cand.date || 'Not stated'}
@@ -896,9 +896,27 @@ export const AddSubscriptionPage: React.FC = () => {
 
                         {!cand.isDuplicate && cand.isRecurring && (
                           <div className="mt-3 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                            <span className="text-purple-700 dark:text-purple-300 text-[11px] font-semibold flex items-center gap-1.5">
-                              <span className="w-1.5 h-1.5 rounded-full bg-purple-600 dark:bg-purple-400" />
-                              <span>Possible Subscription (Needs Review)</span>
+                            <span className={`text-[11px] font-semibold flex items-center gap-1.5 ${
+                              cand.confidence >= 80 && cand.merchantName
+                                ? 'text-emerald-700 dark:text-emerald-300'
+                                : cand.confidence >= 65 && cand.merchantName
+                                ? 'text-purple-700 dark:text-purple-300'
+                                : 'text-amber-700 dark:text-amber-300'
+                            }`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${
+                                cand.confidence >= 80 && cand.merchantName
+                                  ? 'bg-emerald-600 dark:bg-emerald-400'
+                                  : cand.confidence >= 65 && cand.merchantName
+                                  ? 'bg-purple-600 dark:bg-purple-400'
+                                  : 'bg-amber-600 dark:bg-amber-400'
+                              }`} />
+                              <span>
+                                {cand.confidence >= 80 && cand.merchantName
+                                  ? 'Verified Subscription'
+                                  : cand.confidence >= 65 && cand.merchantName
+                                  ? 'Possible Subscription (Needs Review)'
+                                  : 'Review Required (Confirm Merchant)'}
+                              </span>
                             </span>
                           </div>
                         )}
@@ -956,9 +974,29 @@ export const AddSubscriptionPage: React.FC = () => {
                     Service / Merchant Name *
                   </label>
                   {activeCandidate ? (
-                    <span className="text-[11px] font-semibold text-purple-700 dark:text-purple-300 flex items-center gap-1">
-                      <ShieldCheck className="w-3.5 h-3.5" />
-                      <span>Confidence: {activeCandidate.confidence >= 80 ? 'High' : 'Medium'} ({activeCandidate.confidence}%)</span>
+                    <span className={`text-[11px] font-semibold flex items-center gap-1 ${
+                      activeCandidate.confidence >= 80 && activeCandidate.merchantName
+                        ? 'text-emerald-700 dark:text-emerald-300'
+                        : activeCandidate.confidence >= 65 && activeCandidate.merchantName
+                        ? 'text-purple-700 dark:text-purple-300'
+                        : 'text-amber-700 dark:text-amber-300'
+                    }`}>
+                      {activeCandidate.confidence >= 80 && activeCandidate.merchantName ? (
+                        <ShieldCheck className="w-3.5 h-3.5" />
+                      ) : activeCandidate.confidence >= 65 && activeCandidate.merchantName ? (
+                        <ShieldAlert className="w-3.5 h-3.5" />
+                      ) : (
+                        <AlertTriangle className="w-3.5 h-3.5" />
+                      )}
+                      <span>
+                        Confidence: {
+                          activeCandidate.confidence >= 80 && activeCandidate.merchantName
+                            ? 'High'
+                            : activeCandidate.confidence >= 65 && activeCandidate.merchantName
+                            ? 'Medium'
+                            : 'Needs Review'
+                        } ({activeCandidate.confidence}%)
+                      </span>
                     </span>
                   ) : (
                     <span className="text-[11px] text-slate-400">
