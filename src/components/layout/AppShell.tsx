@@ -5,6 +5,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { db } from '../../lib/supabase';
 import { CURRENCY_SYMBOLS, Currency } from '../../types';
 import { formatCurrencyAmount } from '../../lib/currency';
+import { Logo } from '../common/Logo';
 import {
   LayoutDashboard,
   CreditCard,
@@ -134,12 +135,8 @@ export const AppShell: React.FC = () => {
         <div className="flex flex-col flex-1 overflow-y-auto px-5 py-6">
           {/* Logo Header */}
           <div className="flex items-center justify-between mb-8 px-2">
-            <NavLink to="/overview" className="flex items-center gap-2 group">
-              <img
-                src="/logo.png"
-                alt="RecurSight"
-                className="h-11 w-auto max-w-[200px] object-contain dark:brightness-110 group-hover:scale-[1.02] transition-transform"
-              />
+            <NavLink to="/overview" className="flex items-center gap-2 group" aria-label="RecurSight Home">
+              <Logo className="h-11 w-auto max-w-[210px] group-hover:scale-[1.02] transition-transform" />
             </NavLink>
             <button
               onClick={() => setMobileMenuOpen(false)}

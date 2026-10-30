@@ -13,6 +13,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { AuthSideBanner } from '../../components/common/AuthSideBanner';
+import { Logo } from '../../components/common/Logo';
 
 export const SignUp: React.FC = () => {
   const { signUpWithEmail, signInWithOAuth } = useAuth();
@@ -77,12 +78,8 @@ export const SignUp: React.FC = () => {
           <div className="max-w-sm w-full mx-auto">
             
             {/* Branded Logo */}
-            <div className="text-center mb-1">
-              <img
-                src="/logo.png"
-                alt="RecurSight"
-                className="h-10 mx-auto object-contain dark:brightness-110"
-              />
+            <div className="flex justify-center mb-2">
+              <Logo className="h-11 w-auto max-w-[220px]" />
             </div>
 
             {/* Title & Subtitle */}

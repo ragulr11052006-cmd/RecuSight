@@ -15,6 +15,7 @@ import {
   Phone,
   Headset,
 } from 'lucide-react';
+import { Logo } from '../../components/common/Logo';
 
 interface HelpSupportProps {
   isPublic?: boolean;
@@ -231,8 +232,8 @@ export const HelpSupport: React.FC<HelpSupportProps> = ({ isPublic = false }) =>
     return (
       <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-950 p-4 sm:p-6 lg:p-8 font-sans">
         <div className="max-w-4xl mx-auto mb-8 flex items-center justify-between border-b border-slate-200/80 dark:border-slate-800 pb-4">
-          <NavLink to="/login" className="flex items-center gap-2">
-            <img src="/logo.png" alt="RecurSight" className="h-9 object-contain" />
+          <NavLink to="/login" className="flex items-center gap-2" aria-label="RecurSight Home">
+            <Logo className="h-9 w-auto max-w-[200px]" />
           </NavLink>
           <NavLink
             to="/login"
