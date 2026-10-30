@@ -1,6 +1,7 @@
 import React from 'react';
 import { Calendar, ChevronRight } from 'lucide-react';
 import { MerchantLogo } from './MerchantLogo';
+import authBgImage from '../../assets/auth-bg.jpg';
 
 interface AuthSideBannerProps {
   className?: string;
@@ -22,7 +23,7 @@ export const AuthSideBanner: React.FC<AuthSideBannerProps> = ({ className = '' }
     >
       {/* Background Image: Uploaded Businessman with Tablet */}
       <img
-        src="/auth-bg.jpg"
+        src={authBgImage}
         alt="RecurSight Subscriptions Vault"
         className="w-full h-full object-cover object-[25%_center] scale-105 transition-transform duration-700"
       />
