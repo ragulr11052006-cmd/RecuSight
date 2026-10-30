@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   AtSign,
 } from 'lucide-react';
+import { AuthSideBanner } from '../../components/common/AuthSideBanner';
 
 export const Login: React.FC = () => {
   const { signInWithEmail, signUpWithEmail, signInWithOAuth } = useAuth();
@@ -77,15 +78,9 @@ export const Login: React.FC = () => {
       <div className="w-full max-w-[960px] bg-white dark:bg-slate-900 rounded-[28px] shadow-2xl overflow-hidden grid grid-cols-1 md:grid-cols-2 border border-slate-100 dark:border-slate-800">
         
         {/* ========================================================= */}
-        {/* LEFT COLUMN: Young Man with Phone & Subscriptions Card     */}
+        {/* LEFT COLUMN: Uploaded Photo with Subscription Card Overlay */}
         {/* ========================================================= */}
-        <div className="hidden md:block relative h-full w-full bg-slate-900 overflow-hidden min-h-[580px]">
-          <img
-            src="/auth-side-banner.png"
-            alt="RecurSight Vault 2.0 Subscriptions"
-            className="w-full h-full object-cover object-left"
-          />
-        </div>
+        <AuthSideBanner />
 
         {/* ========================================================= */}
         {/* RIGHT COLUMN: Sign In Form                                */}
