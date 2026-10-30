@@ -3,7 +3,8 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { db } from '../../lib/supabase';
-import { parseDocument, ParsedTransaction, convertCurrency } from '../../lib/ocrParser';
+import { parseDocument, ParsedTransaction, convertCurrency, detectCategoryFromText } from '../../lib/ocrParser';
+import { searchCatalog, findCatalogItem, CatalogSubscription } from '../../lib/subscriptionCatalog';
 import { MerchantLogo } from '../../components/common/MerchantLogo';
 import {
   Subscription,
@@ -155,15 +156,79 @@ export const AddSubscriptionPage: React.FC = () => {
   const [railSuccessMsg, setRailSuccessMsg] = useState<string | null>(null);
   const [customRails, setCustomRails] = useState<{ id: string; name: string; num: string; icon: any }[]>([]);
 
+  // Autocomplete state for Merchant or Service Name
+  const [isAutocompleteOpen, setIsAutocompleteOpen] = useState(false);
+  const autocompleteContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // Close autocomplete on click outside
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (
+        autocompleteContainerRef.current &&
+        !autocompleteContainerRef.current.contains(e.target as Node)
+      ) {
+        setIsAutocompleteOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   // Quick Pick preset merchants
   const QUICK_PICKS = [
-    'Adobe Creative Cloud',
     'Netflix',
+    'Disney+ Hotstar',
     'Spotify',
-    'GitHub',
-    'Figma',
+    'YouTube Premium',
+    'Adobe Creative Cloud',
     'ChatGPT Plus',
+    'Figma',
+    'Canva Pro',
+    'GitHub Copilot',
+    'LinkedIn Premium',
   ];
+
+  // Handler for selecting any app (from autocomplete or quick picks)
+  const handleSelectApp = (app: CatalogSubscription | { name: string; category?: SubscriptionCategory; defaultCadence?: 'monthly' | 'annually'; defaultAmounts?: Record<Currency, number> }) => {
+    setManualMerchantName(app.name);
+    if (app.category) {
+      setManualCategory(app.category);
+    }
+    if (app.defaultCadence) {
+      setManualCadence(app.defaultCadence);
+    }
+    if (app.defaultAmounts) {
+      const amt = app.defaultAmounts[manualCurrency] || app.defaultAmounts.USD || 0;
+      if (amt > 0 && (!manualAmount || manualAmount === '0' || manualAmount === '0.00')) {
+        setManualAmount(manualCurrency === 'INR' ? Math.round(amt).toFixed(2) : amt.toFixed(2));
+      }
+    }
+    // Set default renewal date if empty
+    if (!manualNextDate) {
+      const d = new Date();
+      if (app.defaultCadence === 'annually') {
+        d.setFullYear(d.getFullYear() + 1);
+      } else {
+        d.setDate(d.getDate() + 30);
+      }
+      setManualNextDate(d.toISOString().split('T')[0]);
+    }
+    setIsAutocompleteOpen(false);
+  };
+
+  const handleCustomAdd = (customName: string) => {
+    const clean = customName.trim();
+    if (!clean) return;
+    setManualMerchantName(clean);
+    const inferred = detectCategoryFromText(clean);
+    setManualCategory(inferred);
+    if (!manualNextDate) {
+      const d = new Date();
+      d.setDate(d.getDate() + 30);
+      setManualNextDate(d.toISOString().split('T')[0]);
+    }
+    setIsAutocompleteOpen(false);
+  };
 
   // Expenditure Categories for Manual Entry
   const CATEGORIES = [
@@ -496,61 +561,81 @@ export const AddSubscriptionPage: React.FC = () => {
   // SAVE MANUAL ENTRY SUBSCRIPTION (Screenshot 2)
   const handleSaveManual = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!manualMerchantName.trim()) return;
+
     setIsSaving(true);
+    try {
+      const intervalUnit: BillingIntervalUnit = manualCadence === 'annually' ? 'years' : 'months';
+      const numAmount = parseFloat(manualAmount) || 0;
 
-    const intervalUnit: BillingIntervalUnit = manualCadence === 'annually' ? 'years' : 'months';
-    const numAmount = parseFloat(manualAmount) || 0;
-
-    let modeLabel = manualCurrency === 'INR' || userPreferredCurrency === 'INR' ? 'UPI AutoPay (Google Pay / PhonePe)' : 'Corporate Card •••• 4092';
-    let modeBadge = 'UPI AutoPay: Active';
-
-    if (manualPaymentInstrument === 'upi_mandate') {
-      modeLabel = manualCurrency === 'INR' || userPreferredCurrency === 'INR' ? 'UPI AutoPay (Google Pay / PhonePe)' : 'UPI AutoPay';
-      modeBadge = 'UPI AutoPay: Active';
-    } else {
-      const customRail = customRails.find((r) => r.id === manualPaymentInstrument);
-      if (customRail) {
-        modeLabel = customRail.num ? `${customRail.name} • ${customRail.num}` : customRail.name;
-        const isUpi = modeLabel.toLowerCase().includes('upi') || customRail.name.toLowerCase().includes('upi');
-        const isCard = modeLabel.toLowerCase().includes('card') || modeLabel.toLowerCase().includes('visa') || modeLabel.toLowerCase().includes('mastercard') || modeLabel.toLowerCase().includes('••••');
-        modeBadge = isUpi ? 'UPI AutoPay: Active' : isCard ? 'Card Auto-Debit: Active' : 'Bank Mandate: Active';
+      // Ensure valid next billing date: default based on cadence if left empty
+      let validNextDate = manualNextDate && manualNextDate.trim() ? manualNextDate.trim() : '';
+      if (!validNextDate) {
+        const d = new Date();
+        if (manualCadence === 'annually') {
+          d.setFullYear(d.getFullYear() + 1);
+        } else if (manualCadence === 'quarterly') {
+          d.setMonth(d.getMonth() + 3);
+        } else {
+          d.setDate(d.getDate() + 30);
+        }
+        validNextDate = d.toISOString().split('T')[0];
       }
-    }
 
-    const created = await db.createSubscription({
-      user_id: user?.id || 'default-user',
-      merchant_name: manualMerchantName,
-      category: manualCategory,
-      amount: numAmount,
-      currency: manualCurrency,
-      billing_interval: 1,
-      billing_interval_unit: intervalUnit,
-      next_billing_date: manualNextDate,
-      trial_end_date: isTrial ? trialEndDate : undefined,
-      payment_mode_label: modeLabel,
-      payment_mode_badge: modeBadge,
-      status: isTrial ? 'trial' : 'active',
-      confidence_status: 'verified',
-      notes: `Mandate Ref: ${manualMandateRef}`,
-    });
+      let modeLabel = manualCurrency === 'INR' || userPreferredCurrency === 'INR' ? 'UPI AutoPay (Google Pay / PhonePe)' : 'Corporate Card •••• 4092';
+      let modeBadge = 'UPI AutoPay: Active';
 
-    if (created && manualNextDate) {
-      const reminderTime = new Date(manualNextDate);
-      reminderTime.setDate(reminderTime.getDate() - 2);
-      await db.createReminder({
+      if (manualPaymentInstrument === 'upi_mandate') {
+        modeLabel = manualCurrency === 'INR' || userPreferredCurrency === 'INR' ? 'UPI AutoPay (Google Pay / PhonePe)' : 'UPI AutoPay';
+        modeBadge = 'UPI AutoPay: Active';
+      } else {
+        const customRail = customRails.find((r) => r.id === manualPaymentInstrument);
+        if (customRail) {
+          modeLabel = customRail.num ? `${customRail.name} • ${customRail.num}` : customRail.name;
+          const isUpi = modeLabel.toLowerCase().includes('upi') || customRail.name.toLowerCase().includes('upi');
+          const isCard = modeLabel.toLowerCase().includes('card') || modeLabel.toLowerCase().includes('visa') || modeLabel.toLowerCase().includes('mastercard') || modeLabel.toLowerCase().includes('••••');
+          modeBadge = isUpi ? 'UPI AutoPay: Active' : isCard ? 'Card Auto-Debit: Active' : 'Bank Mandate: Active';
+        }
+      }
+
+      const created = await db.createSubscription({
         user_id: user?.id || 'default-user',
-        subscription_id: created.id,
-        scheduled_at: reminderTime.toISOString(),
-        reminder_type: isTrial ? 'trial_expiry' : 'renewal_notice',
-        delivery_channel: manualTargetEmail ? 'email' : 'in_app',
-        status: 'scheduled',
-        timezone: 'EST',
-        notes: `Manual alert for ${manualMerchantName}`,
+        merchant_name: manualMerchantName.trim(),
+        category: manualCategory,
+        amount: numAmount,
+        currency: manualCurrency,
+        billing_interval: 1,
+        billing_interval_unit: intervalUnit,
+        next_billing_date: validNextDate,
+        trial_end_date: isTrial && trialEndDate.trim() ? trialEndDate.trim() : undefined,
+        payment_mode_label: modeLabel,
+        payment_mode_badge: modeBadge,
+        status: isTrial ? 'trial' : 'active',
+        confidence_status: 'verified',
+        notes: manualMandateRef.trim() ? `Mandate Ref: ${manualMandateRef.trim()}` : `Manual subscription entry`,
       });
-    }
 
-    setIsSaving(false);
-    navigate('/subscriptions');
+      if (created && validNextDate) {
+        const reminderTime = new Date(validNextDate);
+        reminderTime.setDate(reminderTime.getDate() - 2);
+        await db.createReminder({
+          user_id: user?.id || 'default-user',
+          subscription_id: created.id,
+          scheduled_at: reminderTime.toISOString(),
+          reminder_type: isTrial ? 'trial_expiry' : 'renewal_notice',
+          delivery_channel: manualTargetEmail ? 'email' : 'in_app',
+          status: 'scheduled',
+          timezone: 'EST',
+          notes: `Manual alert for ${manualMerchantName.trim()}`,
+        });
+      }
+
+      setIsSaving(false);
+      navigate('/subscriptions', { state: { justAdded: manualMerchantName.trim() } });
+    } catch (err) {
+      console.error('Error saving manual subscription:', err);
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -1256,13 +1341,16 @@ export const AddSubscriptionPage: React.FC = () => {
                 <span className="text-xs text-slate-400 font-medium">Step 1 of 2</span>
               </div>
 
-              {/* Merchant Name */}
-              <div>
+              {/* Merchant Name with Real Autocomplete Dropdown */}
+              <div ref={autocompleteContainerRef} className="relative">
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="text-xs font-bold text-slate-800 dark:text-slate-200">
                     Merchant or Service Name *
                   </label>
-                  <span className="text-[11px] text-slate-400 font-medium">Autocomplete enabled</span>
+                  <span className="text-[11px] text-[#2446D8] dark:text-blue-400 font-semibold flex items-center gap-1">
+                    <Sparkles className="w-3 h-3 text-[#2446D8] dark:text-blue-400" />
+                    <span>Search or choose from 40+ apps</span>
+                  </span>
                 </div>
                 <div className="relative">
                   <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -1270,41 +1358,117 @@ export const AddSubscriptionPage: React.FC = () => {
                     type="text"
                     required
                     value={manualMerchantName}
-                    onChange={(e) => setManualMerchantName(e.target.value)}
-                    placeholder="e.g. Netflix, Figma, GitHub"
-                    className="w-full pl-10 pr-28 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#2446D8]"
+                    onFocus={() => setIsAutocompleteOpen(true)}
+                    onChange={(e) => {
+                      setManualMerchantName(e.target.value);
+                      setIsAutocompleteOpen(true);
+                    }}
+                    placeholder="Search e.g. Disney+ Hotstar, Netflix, Prime, Canva, AWS..."
+                    className="w-full pl-10 pr-24 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#2446D8]"
                   />
-                  {manualMerchantName.trim() && (
-                    <div className="absolute right-2.5 top-1/2 -translate-y-1/2">
-                      <span className="px-2.5 py-1 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold border border-emerald-200 dark:border-emerald-800 flex items-center gap-1">
+                  <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                    {manualMerchantName.trim() && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setManualMerchantName('');
+                          setIsAutocompleteOpen(true);
+                        }}
+                        className="p-1 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700"
+                        title="Clear"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                    {manualMerchantName.trim() && (
+                      <span className="px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold border border-emerald-200 dark:border-emerald-800 flex items-center gap-1">
                         <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-                        <span>Recognized</span>
+                        <span>Ready</span>
                       </span>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
+
+                {/* Autocomplete Suggestions Menu */}
+                {isAutocompleteOpen && (
+                  <div className="absolute left-0 right-0 top-full mt-1.5 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 py-2 z-50 max-h-72 overflow-y-auto animate-in fade-in duration-150">
+                    {/* Add as custom app button if query doesn't exactly match catalog */}
+                    {manualMerchantName.trim() && !findCatalogItem(manualMerchantName) && (
+                      <div
+                        onClick={() => handleCustomAdd(manualMerchantName)}
+                        className="px-3.5 py-2 mx-1.5 rounded-xl bg-blue-50/80 dark:bg-blue-950/50 hover:bg-blue-100 dark:hover:bg-blue-900/60 cursor-pointer flex items-center justify-between text-xs font-bold text-[#2446D8] dark:text-blue-400 mb-1.5 transition-colors"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Plus className="w-4 h-4 shrink-0" />
+                          <span>Use &ldquo;{manualMerchantName.trim()}&rdquo; as custom subscription</span>
+                        </div>
+                        <span className="text-[10px] font-semibold text-blue-600 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/80 px-2 py-0.5 rounded-md">
+                          Custom
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      {manualMerchantName.trim() ? 'Matching Services' : 'Popular Subscriptions (Click to Auto-fill)'}
+                    </div>
+
+                    {searchCatalog(manualMerchantName).map((app) => {
+                      const defPrice = app.defaultAmounts[manualCurrency] || app.defaultAmounts.USD;
+                      return (
+                        <div
+                          key={app.id}
+                          onClick={() => handleSelectApp(app)}
+                          className="px-3.5 py-2 hover:bg-slate-50 dark:hover:bg-slate-800/80 cursor-pointer flex items-center justify-between transition-colors group"
+                        >
+                          <div className="flex items-center gap-3">
+                            <MerchantLogo name={app.name} size="sm" />
+                            <div>
+                              <span className="font-bold text-xs text-slate-900 dark:text-white block group-hover:text-[#2446D8] dark:group-hover:text-blue-400 transition-colors">
+                                {app.name}
+                              </span>
+                              <span className="text-[10px] text-slate-400">
+                                {app.category} • {app.defaultCadence === 'annually' ? 'Billed yearly' : 'Billed monthly'}
+                              </span>
+                            </div>
+                          </div>
+
+                          {defPrice && (
+                            <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">
+                              {CURRENCY_SYMBOLS[manualCurrency] || '$'}{manualCurrency === 'INR' ? Math.round(defPrice) : defPrice.toFixed(2)}
+                              <span className="text-[9px] text-slate-400">/{app.defaultCadence === 'annually' ? 'yr' : 'mo'}</span>
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               {/* Quick Picks */}
               <div>
                 <span className="text-xs text-slate-500 dark:text-slate-400 font-medium block mb-2">
-                  Quick Picks:
+                  Quick Picks (Click to Auto-fill):
                 </span>
                 <div className="flex flex-wrap gap-1.5">
-                  {QUICK_PICKS.map((item) => (
-                    <button
-                      key={item}
-                      type="button"
-                      onClick={() => setManualMerchantName(item)}
-                      className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${
-                        manualMerchantName === item
-                          ? 'bg-[#2446D8] text-white'
-                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-                      }`}
-                    >
-                      {item}
-                    </button>
-                  ))}
+                  {QUICK_PICKS.map((item) => {
+                    const catalogItem = findCatalogItem(item);
+                    return (
+                      <button
+                        key={item}
+                        type="button"
+                        onClick={() => handleSelectApp(catalogItem || { name: item })}
+                        className={`px-3 py-1 rounded-full text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                          manualMerchantName.toLowerCase() === item.toLowerCase()
+                            ? 'bg-[#2446D8] text-white shadow-xs'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                        }`}
+                      >
+                        <MerchantLogo name={item} size="xs" />
+                        <span>{item}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 

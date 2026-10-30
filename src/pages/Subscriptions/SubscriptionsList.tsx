@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { NavLink, useSearchParams, useNavigate } from 'react-router-dom';
+import { NavLink, useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../lib/supabase';
 import { Subscription, SubscriptionCategory, SubscriptionStatus } from '../../types';
 import { MerchantLogo } from '../../components/common/MerchantLogo';
-import { formatCurrencyAmount, convertCurrency } from '../../lib/currency';
+import { formatCurrencyAmount, convertCurrency, calculateNormalizedMonthly } from '../../lib/currency';
 import {
   Search,
   Filter,
@@ -33,7 +33,11 @@ import {
 export const SubscriptionsList: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
+  const [successBanner, setSuccessBanner] = useState<string | null>(() => {
+    return (location.state as any)?.justAdded || null;
+  });
 
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(true);
@@ -65,6 +69,7 @@ export const SubscriptionsList: React.FC = () => {
   };
 
   // KPI Calculations
+  const allActiveCommitments = subscriptions.filter(s => s.status !== 'cancelled' && s.status !== 'paused');
   const activeSubs = subscriptions.filter(s => s.status === 'active');
   const trialSubs = subscriptions.filter(s => s.status === 'trial');
   const unconfirmedSubs = subscriptions.filter(s => s.status === 'needs_review' || s.confidence_status === 'unconfirmed_estimate');
@@ -73,10 +78,11 @@ export const SubscriptionsList: React.FC = () => {
     const rawAmt = Number(sub.amount) || 0;
     const prefCur = user?.preferred_currency || 'USD';
     const subCur = (sub.currency as any) || prefCur;
-    return convertCurrency(rawAmt, subCur, prefCur);
+    const converted = convertCurrency(rawAmt, subCur, prefCur);
+    return calculateNormalizedMonthly(converted, sub.billing_interval_unit, sub.billing_interval);
   };
 
-  const monthlyRunRate = activeSubs.reduce((acc, curr) => acc + calculateSubscriptionAmount(curr), 0);
+  const monthlyRunRate = allActiveCommitments.reduce((acc, curr) => acc + calculateSubscriptionAmount(curr), 0);
 
   // Filter application
   const filteredSubscriptions = subscriptions.filter(s => {
@@ -151,6 +157,32 @@ export const SubscriptionsList: React.FC = () => {
 
   return (
     <div className="space-y-7 animate-in fade-in duration-200">
+      
+      {/* Success Notification Banner when subscription just added */}
+      {successBanner && (
+        <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-900 dark:text-emerald-100 flex items-center justify-between shadow-xs animate-in fade-in">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+              <CheckCircle className="w-4 h-4" />
+            </div>
+            <div>
+              <h4 className="font-bold text-xs">Subscription Added Successfully!</h4>
+              <p className="text-[11px] text-emerald-700 dark:text-emerald-300 mt-0.5">
+                &ldquo;{successBanner}&rdquo; has been added and is actively tracked in your portfolio.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              setSuccessBanner(null);
+              navigate(location.pathname, { replace: true, state: {} });
+            }}
+            className="p-1.5 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
       
       {/* ========================================================= */}
       {/* HEADER & TOP STAT CARDS (EXACT FIGMA REPLICATION)         */}
@@ -237,9 +269,11 @@ export const SubscriptionsList: React.FC = () => {
           </div>
           <div className="flex items-baseline gap-1.5 mt-3">
             <span className="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400">
-              {String(activeSubs.length).padStart(2, '0')}
+              {String(allActiveCommitments.length).padStart(2, '0')}
             </span>
-            <span className="text-xs text-slate-400 font-normal">mandates</span>
+            <span className="text-xs text-slate-400 font-normal">
+              {trialSubs.length > 0 ? `(${activeSubs.length} paid, ${trialSubs.length} trials)` : 'mandates'}
+            </span>
           </div>
         </div>
 
