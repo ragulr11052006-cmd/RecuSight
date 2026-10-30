@@ -76,7 +76,7 @@ export const KNOWN_MERCHANTS: {
     patterns: [/disney/i, /hotstar/i],
     name: 'Disney+ Hotstar Super',
     category: 'Streaming & Ent',
-    cadence: 'yearly',
+    cadence: 'monthly',
     defaultAmounts: { USD: 12.99, INR: 899, EUR: 11.99, GBP: 10.99 },
   },
   {

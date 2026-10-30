@@ -183,9 +183,7 @@ export const AddSubscriptionPage: React.FC = () => {
 
   const [manualCadence, setManualCadence] = useState<'monthly' | 'annually' | 'quarterly' | 'custom'>('monthly');
   const [manualNextDate, setManualNextDate] = useState('');
-  const [manualPaymentInstrument, setManualPaymentInstrument] = useState<string>(
-    userPreferredCurrency === 'INR' ? 'upi_mandate' : 'hdfc_corp'
-  );
+  const [manualPaymentInstrument, setManualPaymentInstrument] = useState<string>('upi_mandate');
   const [manualMandateRef, setManualMandateRef] = useState('');
   const [manualAlert7Days, setManualAlert7Days] = useState(true);
   const [manualAlert2Days, setManualAlert2Days] = useState(true);
@@ -1459,47 +1457,12 @@ export const AddSubscriptionPage: React.FC = () => {
                 </label>
                 <div className="space-y-2">
                   {[
-                    ...(manualCurrency === 'INR'
-                      ? [
-                          {
-                            id: 'upi_mandate',
-                            name: 'UPI AutoPay (Google Pay / PhonePe)',
-                            num: 'upi@okaxis • Instant Auto-Debit',
-                            icon: Smartphone,
-                          },
-                          {
-                            id: 'hdfc_corp',
-                            name: 'HDFC Bank Salary Account',
-                            num: 'A/c •••• 4092 • NetBanking e-Mandate',
-                            icon: CreditCard,
-                          },
-                          {
-                            id: 'icici_master',
-                            name: 'ICICI / SBI Credit Card',
-                            num: '•••• 9811 (Exp 12/27) • Standing Instruction',
-                            icon: CreditCard,
-                          },
-                        ]
-                      : [
-                          {
-                            id: 'hdfc_corp',
-                            name: 'HDFC Visa Corporate',
-                            num: '•••• 4092 (Exp 09/28)',
-                            icon: CreditCard,
-                          },
-                          {
-                            id: 'icici_master',
-                            name: 'ICICI Master Card',
-                            num: '•••• 9811 (Exp 12/27)',
-                            icon: CreditCard,
-                          },
-                          {
-                            id: 'upi_mandate',
-                            name: 'UPI AutoPay / Mandate',
-                            num: 'Google Pay / recurring standing instruction',
-                            icon: Smartphone,
-                          },
-                        ]),
+                    {
+                      id: 'upi_mandate',
+                      name: 'UPI AutoPay (Google Pay / PhonePe)',
+                      num: manualCurrency === 'INR' ? 'upi@okaxis • Instant Auto-Debit' : 'Google Pay / PhonePe • AutoPay',
+                      icon: Smartphone,
+                    },
                     ...customRails,
                   ].map((inst) => {
                     const Icon = inst.icon;
@@ -1557,7 +1520,7 @@ export const AddSubscriptionPage: React.FC = () => {
                   className="w-full mt-2.5 py-2.5 rounded-xl border border-blue-200 dark:border-blue-900/60 text-[#2446D8] dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>Link New Payment Rail</span>
+                  <span>Link New Payment</span>
                 </button>
               </div>
 

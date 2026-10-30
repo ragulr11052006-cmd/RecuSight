@@ -58,25 +58,15 @@ export const Overview: React.FC = () => {
   const trialSubs = subscriptions.filter(s => s.status === 'trial');
   const attentionSubs = subscriptions.filter(s => s.status === 'needs_review' || s.confidence_status === 'unconfirmed_estimate');
 
-  // Normalized monthly expenditure calculation (cross-currency normalized to USD baseline)
-  const calculateMonthlyAmount = (sub: Subscription): number => {
+  // Expenditure calculation tracking subscription transaction amounts directly in user preferred currency
+  const calculateSubscriptionAmount = (sub: Subscription): number => {
     const rawAmt = Number(sub.amount) || 0;
-    const amt = convertCurrency(rawAmt, (sub.currency as any) || 'USD', 'USD');
-    const interval = sub.billing_interval || 1;
-    switch (sub.billing_interval_unit) {
-      case 'years':
-        return amt / (12 * interval);
-      case 'weeks':
-        return (amt * 52) / (12 * interval);
-      case 'days':
-        return (amt * 30.4) / interval;
-      case 'months':
-      default:
-        return amt / interval;
-    }
+    const prefCur = user?.preferred_currency || 'USD';
+    const subCur = (sub.currency as any) || prefCur;
+    return convertCurrency(rawAmt, subCur, prefCur);
   };
 
-  const calculatedRunRate = activeSubs.reduce((acc, curr) => acc + calculateMonthlyAmount(curr), 0);
+  const calculatedRunRate = activeSubs.reduce((acc, curr) => acc + calculateSubscriptionAmount(curr), 0);
   const monthlyRunRate = calculatedRunRate;
   const totalSpend = spendInterval === 'yearly' ? monthlyRunRate * 12 : monthlyRunRate;
 
@@ -102,7 +92,7 @@ export const Overview: React.FC = () => {
 
   activeSubs.forEach((sub) => {
     const cat = sub.category || 'Other';
-    const monthlyAmt = calculateMonthlyAmount(sub);
+    const subAmt = calculateSubscriptionAmount(sub);
     if (!categoryMap[cat]) {
       categoryMap[cat] = {
         apps: 0,
@@ -111,7 +101,7 @@ export const Overview: React.FC = () => {
       };
     }
     categoryMap[cat].apps += 1;
-    categoryMap[cat].amount += monthlyAmt;
+    categoryMap[cat].amount += subAmt;
   });
 
   const categoryEntries = Object.entries(categoryMap)
@@ -163,7 +153,7 @@ export const Overview: React.FC = () => {
     return new Date(s.created_at) < startOfCurrentMonth;
   });
   const priorPeriodMonthlySpend = priorPeriodActiveSubs.reduce(
-    (acc, curr) => acc + calculateMonthlyAmount(curr),
+    (acc, curr) => acc + calculateSubscriptionAmount(curr),
     0
   );
 
@@ -222,18 +212,20 @@ export const Overview: React.FC = () => {
     renewalFilter === 'month' ? monthlyUpcoming :
     allUpcoming;
 
+  const prefCur = user?.preferred_currency || 'USD';
+
   const upcomingTotal = filteredUpcoming.reduce(
-    (sum, s) => sum + convertCurrency(Number(s.amount) || 0, (s.currency as any) || 'USD', 'USD'),
+    (sum, s) => sum + convertCurrency(Number(s.amount) || 0, (s.currency as any) || prefCur, prefCur),
     0
   );
 
   const weeklyUpcomingTotal = weeklyUpcoming.reduce(
-    (sum, s) => sum + convertCurrency(Number(s.amount) || 0, (s.currency as any) || 'USD', 'USD'),
+    (sum, s) => sum + convertCurrency(Number(s.amount) || 0, (s.currency as any) || prefCur, prefCur),
     0
   );
 
-  const formatCurrency = (val: number, fromCur: string = 'USD', decimals?: number) => {
-    return formatCurrencyAmount(val, user?.preferred_currency || 'USD', fromCur as any, { decimals });
+  const formatCurrency = (val: number, fromCur?: string, decimals?: number) => {
+    return formatCurrencyAmount(val, prefCur, (fromCur as any) || prefCur, { decimals });
   };
 
   const handleKeepTrial = async (sub: Subscription) => {
@@ -613,7 +605,7 @@ export const Overview: React.FC = () => {
                     TOTAL SPEND
                   </span>
                   <span className="text-xl font-black text-[#151B2D] dark:text-white">
-                    {formatCurrency(totalSpend, 'USD', 0)}
+                    {formatCurrency(totalSpend, undefined, 0)}
                   </span>
                   <span className="text-[10px] font-bold text-emerald-600">
                     Active
@@ -878,7 +870,9 @@ export const Overview: React.FC = () => {
                         <span className="text-sm font-bold text-[#151B2D] dark:text-white block">
                           {formatCurrency(Number(sub.amount), sub.currency)}
                         </span>
-                        <span className="text-[10px] text-slate-400">/ month</span>
+                        <span className="text-[10px] text-slate-400">
+                          /{sub.billing_interval_unit === 'years' ? 'year' : 'month'}
+                        </span>
                       </div>
 
                       <ChevronRight className="w-4 h-4 text-slate-300 dark:text-slate-600" />

@@ -67,24 +67,14 @@ export const SubscriptionsList: React.FC = () => {
   const trialSubs = subscriptions.filter(s => s.status === 'trial');
   const unconfirmedSubs = subscriptions.filter(s => s.status === 'needs_review' || s.confidence_status === 'unconfirmed_estimate');
 
-  const calculateMonthlyAmount = (sub: Subscription): number => {
+  const calculateSubscriptionAmount = (sub: Subscription): number => {
     const rawAmt = Number(sub.amount) || 0;
-    const amt = convertCurrency(rawAmt, (sub.currency as any) || 'USD', 'USD');
-    const interval = sub.billing_interval || 1;
-    switch (sub.billing_interval_unit) {
-      case 'years':
-        return amt / (12 * interval);
-      case 'weeks':
-        return (amt * 52) / (12 * interval);
-      case 'days':
-        return (amt * 30.4) / interval;
-      case 'months':
-      default:
-        return amt / interval;
-    }
+    const prefCur = user?.preferred_currency || 'USD';
+    const subCur = (sub.currency as any) || prefCur;
+    return convertCurrency(rawAmt, subCur, prefCur);
   };
 
-  const monthlyRunRate = activeSubs.reduce((acc, curr) => acc + calculateMonthlyAmount(curr), 0);
+  const monthlyRunRate = activeSubs.reduce((acc, curr) => acc + calculateSubscriptionAmount(curr), 0);
 
   // Filter application
   const filteredSubscriptions = subscriptions.filter(s => {
@@ -152,8 +142,9 @@ export const SubscriptionsList: React.FC = () => {
     document.body.removeChild(link);
   };
 
-  const formatCurrency = (val: number, cur: string = 'USD') => {
-    return formatCurrencyAmount(val, user?.preferred_currency || 'USD', cur as any);
+  const formatCurrency = (val: number, cur?: string) => {
+    const prefCur = user?.preferred_currency || 'USD';
+    return formatCurrencyAmount(val, prefCur, (cur as any) || prefCur);
   };
 
   return (
@@ -226,7 +217,7 @@ export const SubscriptionsList: React.FC = () => {
           </div>
           <div className="flex items-baseline gap-1 mt-3">
             <span className="text-xl sm:text-2xl font-black text-[#151B2D] dark:text-white truncate">
-              {formatCurrency(monthlyRunRate, 'USD')}
+              {formatCurrency(monthlyRunRate)}
             </span>
             <span className="text-xs text-slate-400 font-normal shrink-0">/mo</span>
           </div>
