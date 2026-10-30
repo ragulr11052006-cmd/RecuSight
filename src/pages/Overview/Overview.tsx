@@ -702,7 +702,7 @@ export const Overview: React.FC = () => {
                   const paymentSourceDisplay =
                     trial.payment_mode_label ||
                     trial.payment_source?.display_name ||
-                    (prefCur === 'INR' ? 'UPI AutoPay (Google Pay)' : 'Corporate Card •••• 4092');
+                    (prefCur === 'INR' ? 'UPI AutoPay (Google Pay / PhonePe)' : 'Corporate Card •••• 4092');
                   return (
                     <div key={trial.id} className="p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 shadow-xs space-y-2.5">
                       <div className="flex items-start justify-between">
@@ -833,7 +833,7 @@ export const Overview: React.FC = () => {
                 const paymentSource =
                   sub.payment_mode_label ||
                   sub.payment_source?.display_name ||
-                  (prefCur === 'INR' ? 'UPI AutoPay (Google Pay)' : 'Corporate Card •••• 4092');
+                  (prefCur === 'INR' ? 'UPI AutoPay (Google Pay / PhonePe)' : 'Corporate Card •••• 4092');
                 return (
                   <div
                     key={sub.id}
@@ -932,7 +932,7 @@ export const Overview: React.FC = () => {
                           </span>
                         </div>
                         <span className="text-[10px] text-slate-400 block mt-0.5">
-                          {sub.category} • <span className="font-semibold text-slate-600 dark:text-slate-300">{sub.payment_mode_label || sub.payment_source?.display_name || (prefCur === 'INR' ? 'UPI AutoPay (Google Pay)' : 'Corporate Card •••• 4092')}</span>
+                          {sub.category} • <span className="font-semibold text-slate-600 dark:text-slate-300">{sub.payment_mode_label || sub.payment_source?.display_name || (prefCur === 'INR' ? 'UPI AutoPay (Google Pay / PhonePe)' : 'Corporate Card •••• 4092')}</span>
                         </span>
                       </div>
                     </div>

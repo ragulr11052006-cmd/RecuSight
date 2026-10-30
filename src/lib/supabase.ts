@@ -328,7 +328,7 @@ const INITIAL_SUBSCRIPTIONS: Subscription[] = [
     billing_interval: 1,
     billing_interval_unit: 'months',
     next_billing_date: 'Nov 24, 2026',
-    payment_mode_label: 'UPI AutoPay (Google Pay)',
+    payment_mode_label: 'UPI AutoPay (Google Pay / PhonePe)',
     payment_mode_badge: 'UPI AutoPay: Active',
     status: 'active',
     confidence_status: 'verified',
@@ -348,7 +348,7 @@ const INITIAL_SUBSCRIPTIONS: Subscription[] = [
     billing_interval: 1,
     billing_interval_unit: 'months',
     next_billing_date: 'Nov 28, 2026',
-    payment_mode_label: 'UPI Autopay (Gpay)',
+    payment_mode_label: 'UPI AutoPay (Google Pay / PhonePe)',
     payment_mode_badge: 'UPI AutoPay: Active',
     status: 'active',
     confidence_status: 'verified',
@@ -368,8 +368,8 @@ const INITIAL_SUBSCRIPTIONS: Subscription[] = [
     billing_interval: 1,
     billing_interval_unit: 'months',
     next_billing_date: 'Dec 24, 2026',
-    payment_mode_label: 'SBI Visa •••• 2345',
-    payment_mode_badge: 'Card AutoPay: Active',
+    payment_mode_label: 'UPI AutoPay (Google Pay / PhonePe)',
+    payment_mode_badge: 'UPI AutoPay: Active',
     status: 'active',
     confidence_status: 'verified',
     notes: 'Anthropic Claude Team workspace',
@@ -388,8 +388,8 @@ const INITIAL_SUBSCRIPTIONS: Subscription[] = [
     billing_interval: 1,
     billing_interval_unit: 'years',
     next_billing_date: 'Dec 31, 2026',
-    payment_mode_label: 'UPI Autopay (Gpay)',
-    payment_mode_badge: 'Card AutoPay: InActive',
+    payment_mode_label: 'UPI AutoPay (Google Pay / PhonePe)',
+    payment_mode_badge: 'UPI AutoPay: Active',
     status: 'paused',
     confidence_status: 'verified',
     notes: 'Design Suite Annual Pro',
@@ -408,8 +408,8 @@ const INITIAL_SUBSCRIPTIONS: Subscription[] = [
     billing_interval: 1,
     billing_interval_unit: 'months',
     next_billing_date: 'Jan 24, 2027',
-    payment_mode_label: 'SBI Visa •••• 2345',
-    payment_mode_badge: 'Annual Auto Renewal',
+    payment_mode_label: 'UPI AutoPay (Google Pay / PhonePe)',
+    payment_mode_badge: 'UPI AutoPay: Active',
     status: 'trial',
     confidence_status: 'verified',
     notes: 'Notion AI Plus trial tier',
@@ -428,8 +428,8 @@ const INITIAL_SUBSCRIPTIONS: Subscription[] = [
     billing_interval: 1,
     billing_interval_unit: 'months',
     next_billing_date: 'Mar 24, 2027',
-    payment_mode_label: 'HDFC Visa •••• 4090',
-    payment_mode_badge: 'Card AutoPay: Active',
+    payment_mode_label: 'UPI AutoPay (Google Pay / PhonePe)',
+    payment_mode_badge: 'UPI AutoPay: Active',
     status: 'trial',
     confidence_status: 'verified',
     notes: 'Perplexity Pro trial',
@@ -448,7 +448,7 @@ const INITIAL_SUBSCRIPTIONS: Subscription[] = [
     billing_interval: 1,
     billing_interval_unit: 'months',
     next_billing_date: 'Nov 04, 2026',
-    payment_mode_label: 'UPI AutoPay (Google Pay)',
+    payment_mode_label: 'UPI AutoPay (Google Pay / PhonePe)',
     payment_mode_badge: 'UPI AutoPay: Active',
     status: 'active',
     confidence_status: 'verified',
@@ -468,8 +468,8 @@ const INITIAL_SUBSCRIPTIONS: Subscription[] = [
     billing_interval: 1,
     billing_interval_unit: 'months',
     next_billing_date: 'Nov 12, 2026',
-    payment_mode_label: 'SBI Visa •••• 2345',
-    payment_mode_badge: 'Card AutoPay: Active',
+    payment_mode_label: 'UPI AutoPay (Google Pay / PhonePe)',
+    payment_mode_badge: 'UPI AutoPay: Active',
     status: 'active',
     confidence_status: 'verified',
     notes: 'Developer tools',
@@ -487,8 +487,8 @@ const INITIAL_SUBSCRIPTIONS: Subscription[] = [
     billing_interval: 1,
     billing_interval_unit: 'months',
     next_billing_date: 'Oct 31, 2026',
-    payment_mode_label: 'HDFC Visa •••• 4090',
-    payment_mode_badge: 'Card AutoPay: Active',
+    payment_mode_label: 'UPI AutoPay (Google Pay / PhonePe)',
+    payment_mode_badge: 'UPI AutoPay: Active',
     status: 'active',
     confidence_status: 'verified',
     notes: 'All apps cloud subscription',
@@ -507,7 +507,7 @@ const INITIAL_SUBSCRIPTIONS: Subscription[] = [
     billing_interval: 1,
     billing_interval_unit: 'months',
     next_billing_date: 'Nov 18, 2026',
-    payment_mode_label: 'SBI Visa •••• 2345',
+    payment_mode_label: 'UPI AutoPay (Google Pay / PhonePe)',
     payment_mode_badge: 'UPI AutoPay: Active',
     status: 'active',
     confidence_status: 'verified',
@@ -526,8 +526,8 @@ const INITIAL_SUBSCRIPTIONS: Subscription[] = [
     billing_interval: 1,
     billing_interval_unit: 'months',
     next_billing_date: 'Dec 05, 2026',
-    payment_mode_label: 'HDFC Visa •••• 4090',
-    payment_mode_badge: 'Card AutoPay: Active',
+    payment_mode_label: 'UPI AutoPay (Google Pay / PhonePe)',
+    payment_mode_badge: 'UPI AutoPay: Active',
     status: 'active',
     confidence_status: 'verified',
     notes: 'Video and delivery membership',
@@ -545,7 +545,7 @@ const INITIAL_SUBSCRIPTIONS: Subscription[] = [
     billing_interval: 1,
     billing_interval_unit: 'months',
     next_billing_date: 'Nov 29, 2026',
-    payment_mode_label: 'UPI Autopay (Gpay)',
+    payment_mode_label: 'UPI AutoPay (Google Pay / PhonePe)',
     payment_mode_badge: 'UPI AutoPay: Active',
     status: 'active',
     confidence_status: 'verified',
@@ -564,7 +564,7 @@ const INITIAL_SUBSCRIPTIONS: Subscription[] = [
     billing_interval: 1,
     billing_interval_unit: 'years',
     next_billing_date: 'Nov 26, 2026',
-    payment_mode_label: 'UPI AutoPay (Google Pay)',
+    payment_mode_label: 'UPI AutoPay (Google Pay / PhonePe)',
     payment_mode_badge: 'UPI AutoPay: Active',
     status: 'needs_review',
     confidence_status: 'unconfirmed_estimate',
@@ -583,8 +583,8 @@ const INITIAL_SUBSCRIPTIONS: Subscription[] = [
     billing_interval: 1,
     billing_interval_unit: 'months',
     next_billing_date: 'Dec 02, 2026',
-    payment_mode_label: 'SBI Visa •••• 2345',
-    payment_mode_badge: 'Card AutoPay: Active',
+    payment_mode_label: 'UPI AutoPay (Google Pay / PhonePe)',
+    payment_mode_badge: 'UPI AutoPay: Active',
     status: 'needs_review',
     confidence_status: 'unconfirmed_estimate',
     notes: 'Developer IDE monthly assistant',
@@ -700,23 +700,32 @@ export const db = {
       .filter(s => s.user_id === userId || (userId === 'default-user' || userId === 'demo-user-123' ? s.user_id === 'default-user' : false))
       .map(s => {
         const ps = sources.find(p => p.id === s.payment_source_id);
-        let modeLabel = s.payment_mode_label;
+        let modeLabel: string = s.payment_mode_label || (ps ? ps.display_name : 'UPI AutoPay (Google Pay / PhonePe)');
         let modeBadge = s.payment_mode_badge;
 
-        if (!modeLabel) {
-          if (ps) {
-            modeLabel = ps.display_name;
-          } else {
-            modeLabel = s.currency === 'INR' ? 'UPI AutoPay (Google Pay)' : 'Corporate Card •••• 4092';
-          }
+        // If the subscription has a legacy hardcoded card placeholder
+        const isLegacyPlaceholder =
+          modeLabel === 'HDFC Visa •••• 4090' ||
+          modeLabel === 'SBI Visa •••• 2345' ||
+          modeLabel === 'Card ••4821' ||
+          modeLabel === 'Card •••• 4821';
+
+        if (isLegacyPlaceholder) {
+          modeLabel = ps ? ps.display_name : 'UPI AutoPay (Google Pay / PhonePe)';
         }
-        // Correct legacy contradictory pairs (e.g. HDFC Visa text with UPI badge)
-        if (modeBadge?.includes('UPI') && modeLabel.includes('Visa')) {
-          modeLabel = 'UPI AutoPay (Google Pay)';
+
+        // Standardize any UPI naming variations to the exact unified label
+        if (
+          modeLabel.toLowerCase().includes('upi') ||
+          modeLabel.toLowerCase().includes('gpay') ||
+          modeLabel.toLowerCase().includes('phonepe')
+        ) {
+          modeLabel = 'UPI AutoPay (Google Pay / PhonePe)';
+          modeBadge = 'UPI AutoPay: Active';
         }
 
         if (!modeBadge) {
-          const isUpi = modeLabel.toLowerCase().includes('upi') || modeLabel.toLowerCase().includes('gpay') || modeLabel.toLowerCase().includes('phonepe');
+          const isUpi = modeLabel.toLowerCase().includes('upi');
           const isCard = modeLabel.toLowerCase().includes('visa') || modeLabel.toLowerCase().includes('card') || modeLabel.toLowerCase().includes('••••');
           modeBadge = isUpi ? 'UPI AutoPay: Active' : isCard ? 'Card Auto-Debit: Active' : 'AutoPay: Active';
         }

@@ -484,7 +484,7 @@ export const SubscriptionsList: React.FC = () => {
                       {/* Payment Mode & AutoPay Sub-badge */}
                       <td className="py-4 px-4 whitespace-nowrap">
                         <div className="text-[#151B2D] dark:text-white font-medium text-xs whitespace-nowrap">
-                          {sub.payment_mode_label || sub.payment_source?.display_name || (prefCur === 'INR' ? 'UPI AutoPay (Google Pay)' : 'Corporate Card •••• 4092')}
+                          {sub.payment_mode_label || sub.payment_source?.display_name || (prefCur === 'INR' ? 'UPI AutoPay (Google Pay / PhonePe)' : 'Corporate Card •••• 4092')}
                         </div>
                         <div className="mt-1">
                           {(() => {
@@ -510,10 +510,10 @@ export const SubscriptionsList: React.FC = () => {
                             const isUpi = label.includes('upi') || label.includes('gpay') || label.includes('phonepe') || label.includes('paytm');
                             const isWallet = label.includes('paypal') || label.includes('apple pay') || label.includes('wallet');
 
-                            const badgeText = sub.payment_mode_badge
-                              ? sub.payment_mode_badge
-                              : isUpi
+                            const badgeText = isUpi
                               ? 'UPI AutoPay: Active'
+                              : sub.payment_mode_badge
+                              ? sub.payment_mode_badge
                               : isCard
                               ? 'Card Auto-Debit: Active'
                               : isWallet
@@ -707,7 +707,7 @@ export const SubscriptionsList: React.FC = () => {
                     <div className="flex justify-between text-slate-500 dark:text-slate-400">
                       <span>Instrument:</span>
                       <span className="font-semibold text-slate-900 dark:text-white">
-                        {sub.payment_mode_label || sub.payment_source?.display_name || (prefCur === 'INR' ? 'UPI AutoPay (Google Pay)' : 'Corporate Card •••• 4092')}
+                        {sub.payment_mode_label || sub.payment_source?.display_name || (prefCur === 'INR' ? 'UPI AutoPay (Google Pay / PhonePe)' : 'Corporate Card •••• 4092')}
                       </span>
                     </div>
                   </div>
@@ -829,7 +829,7 @@ export const SubscriptionsList: React.FC = () => {
               <div className="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-800">
                 <span className="text-slate-400">Payment Instrument:</span>
                 <span className="font-semibold text-slate-900 dark:text-white">
-                  {selectedSubForDetails.payment_mode_label || selectedSubForDetails.payment_source?.display_name || (prefCur === 'INR' ? 'UPI AutoPay (Google Pay)' : 'Corporate Card •••• 4092')}
+                  {selectedSubForDetails.payment_mode_label || selectedSubForDetails.payment_source?.display_name || (prefCur === 'INR' ? 'UPI AutoPay (Google Pay / PhonePe)' : 'Corporate Card •••• 4092')}
                 </span>
               </div>
               <div className="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-800">
