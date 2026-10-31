@@ -220,28 +220,6 @@ export const Overview: React.FC = () => {
         }))
       : [{ name: 'No Spend', value: 1, color: isDarkMode ? '#334155' : '#E2E8F0' }];
 
-  // 6-Month Timeline Strip ending at selected month (or current month)
-  const past6Months = Array.from({ length: 6 }).map((_, i) => {
-    const d = new Date(selectedYear, selectedMonth - 5 + i, 1);
-    const y = d.getFullYear();
-    const mIdx = d.getMonth();
-    const subsInMonth = getActiveSubsForMonth(y, mIdx, allActiveCommitments);
-    const mSpend = subsInMonth.reduce((acc, curr) => acc + calculateSubscriptionMonthlyAmount(curr), 0);
-    const finalSpend = spendInterval === 'yearly' ? mSpend * 12 : mSpend;
-
-    return {
-      date: d,
-      year: y,
-      monthIndex: mIdx,
-      name: MONTHS_LIST[mIdx],
-      shortName: MONTHS_LIST[mIdx].slice(0, 3),
-      spend: finalSpend,
-      activeCount: subsInMonth.length,
-    };
-  });
-
-  const maxSpendInPast6 = Math.max(...past6Months.map((m) => m.spend), 1);
-
   // Month-over-month comparison vs immediately preceding month
   const prevMonthDate = new Date(selectedYear, selectedMonth - 1, 1);
   const prevMonthSubs = getActiveSubsForMonth(prevMonthDate.getFullYear(), prevMonthDate.getMonth(), allActiveCommitments);
@@ -621,109 +599,60 @@ export const Overview: React.FC = () => {
         {/* Spend Analysis Card (Even 1/2) */}
         <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 lg:p-7 border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col justify-between">
           <div>
-            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-4">
+            {/* Card Header: Title on Left, Month Stepper & Switcher on Right */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
               <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-lg font-bold text-[#151B2D] dark:text-white">
-                    Spend Analysis
-                  </h2>
-                  {!isCurrentMonthSelected && (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
-                      Viewing Past Period
-                    </span>
-                  )}
-                </div>
+                <h2 className="text-lg font-bold text-[#151B2D] dark:text-white">
+                  Spend Analysis
+                </h2>
                 <p className="text-xs text-slate-400 mt-0.5">
                   Category distribution & verified recurring allocation breakdown
                 </p>
               </div>
 
-              {/* Dynamic spend trend badge */}
-              {selectedMonthActiveSubs.length > 0 && totalSpend > 0 && spendTrendBadge.type !== 'empty' && (
-                spendTrendBadge.type === 'positive' ? (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#E8F7EE] dark:bg-emerald-950/60 text-[#126639] dark:text-emerald-300 shrink-0">
-                    <TrendingUp className="w-3 h-3" />
-                    {spendTrendBadge.label}
-                  </span>
-                ) : spendTrendBadge.type === 'negative' ? (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#FEF2F2] dark:bg-rose-950/60 text-[#991B1B] dark:text-rose-300 shrink-0">
-                    <TrendingDown className="w-3 h-3" />
-                    {spendTrendBadge.label}
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 shrink-0">
-                    {spendTrendBadge.label}
-                  </span>
-                )
-              )}
-            </div>
-
-            {/* Run Rate & Filter Toggles */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl lg:text-4xl font-black text-[#151B2D] dark:text-white tracking-tight">
-                  {formatCurrency(totalSpend)}
-                </span>
-                <span className="text-xs text-slate-400 font-normal">
-                  / {spendInterval === 'yearly' ? `${selectedYear} annual run-rate` : `${selectedMonthName} ${selectedYear} spend`}
-                </span>
-              </div>
-
-              <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-                {/* Monthly / Yearly Toggle */}
-                <div className="flex rounded-xl bg-slate-100 dark:bg-slate-800 p-0.5 border border-slate-200 dark:border-slate-700">
+              {/* Month Stepper & Changing Month Selector Tabs */}
+              <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
+                {/* Return to Current Month Pill (Visible when viewing past/future month) */}
+                {!isCurrentMonthSelected && (
                   <button
                     type="button"
-                    onClick={() => setSpendInterval('monthly')}
-                    className={`py-1 px-3 rounded-lg text-xs font-bold transition-all ${
-                      spendInterval === 'monthly'
-                        ? 'bg-[#2446D8] text-white shadow-xs'
-                        : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white'
-                    }`}
+                    onClick={() => setSelectedDate(new Date(currentYear, currentMonth, 1))}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-bold text-[#2446D8] bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition shrink-0 cursor-pointer whitespace-nowrap"
+                    title="Return to current month"
                   >
-                    Monthly
+                    <RotateCcw className="w-3 h-3" />
+                    <span>Current ({MONTHS_LIST[currentMonth].slice(0, 3)})</span>
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setSpendInterval('yearly')}
-                    className={`py-1 px-3 rounded-lg text-xs font-bold transition-all ${
-                      spendInterval === 'yearly'
-                        ? 'bg-[#2446D8] text-white shadow-xs'
-                        : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white'
-                    }`}
-                  >
-                    Yearly
-                  </button>
-                </div>
+                )}
 
-                {/* Interactive Month Stepper with Dropdown */}
-                <div ref={monthPickerRef} className="flex items-center gap-0.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-0.5 shadow-xs relative">
+                {/* Horizontal Month Stepper */}
+                <div ref={monthPickerRef} className="flex items-center gap-0.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-0.5 shadow-xs relative">
                   <button
                     type="button"
                     onClick={handlePrevMonth}
                     title="Previous month"
-                    className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white transition cursor-pointer"
+                    className="p-1.5 hover:bg-white dark:hover:bg-slate-700 rounded-lg text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white transition cursor-pointer"
                   >
-                    <ChevronLeft className="w-3.5 h-3.5" />
+                    <ChevronLeft className="w-4 h-4" />
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setIsMonthDropdownOpen(!isMonthDropdownOpen)}
-                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold text-slate-800 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition cursor-pointer"
+                    className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold text-slate-800 dark:text-slate-200 bg-white dark:bg-slate-700/80 shadow-xs hover:bg-slate-100 dark:hover:bg-slate-600 transition cursor-pointer whitespace-nowrap"
                   >
                     <Calendar className="w-3.5 h-3.5 text-[#2446D8]" />
-                    <span>{selectedMonthName} {selectedYear}</span>
-                    <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${isMonthDropdownOpen ? 'rotate-180' : ''}`} />
+                    <span className="font-extrabold">{selectedMonthName} {selectedYear}</span>
+                    <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isMonthDropdownOpen ? 'rotate-180' : ''}`} />
                   </button>
 
                   <button
                     type="button"
                     onClick={handleNextMonth}
                     title="Next month"
-                    className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white transition cursor-pointer"
+                    className="p-1.5 hover:bg-white dark:hover:bg-slate-700 rounded-lg text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white transition cursor-pointer"
                   >
-                    <ChevronRight className="w-3.5 h-3.5" />
+                    <ChevronRight className="w-4 h-4" />
                   </button>
 
                   {/* Dropdown Menu */}
@@ -733,7 +662,7 @@ export const Overview: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => setSelectedDate(new Date(selectedYear - 1, selectedMonth, 1))}
-                          className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500"
+                          className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 cursor-pointer"
                         >
                           <ChevronLeft className="w-4 h-4" />
                         </button>
@@ -741,7 +670,7 @@ export const Overview: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => setSelectedDate(new Date(selectedYear + 1, selectedMonth, 1))}
-                          className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500"
+                          className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 cursor-pointer"
                         >
                           <ChevronRight className="w-4 h-4" />
                         </button>
@@ -789,75 +718,63 @@ export const Overview: React.FC = () => {
                     </div>
                   )}
                 </div>
+              </div>
+            </div>
 
-                {/* Return to Current Month Pill (Visible when viewing past/future month) */}
-                {!isCurrentMonthSelected && (
-                  <button
-                    type="button"
-                    onClick={() => setSelectedDate(new Date(currentYear, currentMonth, 1))}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-bold text-[#2446D8] bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition shrink-0 cursor-pointer"
-                    title="Return to current month"
-                  >
-                    <RotateCcw className="w-3 h-3" />
-                    <span>Current</span>
-                  </button>
+            {/* Row 2: Spend Metric & Period Toggle Tabs */}
+            <div className="flex items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-baseline gap-2.5 flex-wrap">
+                <span className="text-3xl lg:text-4xl font-black text-[#151B2D] dark:text-white tracking-tight whitespace-nowrap">
+                  {formatCurrency(totalSpend)}
+                </span>
+                <span className="text-xs font-medium text-slate-400 whitespace-nowrap">
+                  / {spendInterval === 'yearly' ? 'year run-rate' : 'month'}
+                </span>
+
+                {/* Period Trend Badge */}
+                {selectedMonthActiveSubs.length > 0 && totalSpend > 0 && spendTrendBadge.type !== 'empty' && (
+                  <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold shrink-0 ml-1 ${
+                    spendTrendBadge.type === 'positive'
+                      ? 'bg-[#E8F7EE] dark:bg-emerald-950/60 text-[#126639] dark:text-emerald-300'
+                      : spendTrendBadge.type === 'negative'
+                      ? 'bg-[#FEF2F2] dark:bg-rose-950/60 text-[#991B1B] dark:text-rose-300'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                  }`}>
+                    {spendTrendBadge.type === 'positive' && <TrendingUp className="w-3 h-3" />}
+                    {spendTrendBadge.type === 'negative' && <TrendingDown className="w-3 h-3" />}
+                    {spendTrendBadge.label}
+                  </span>
                 )}
               </div>
-            </div>
 
-            {/* Interactive Past 6 Months Trend Bar Strip */}
-            <div className="mb-5 p-3 bg-slate-50/80 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                  Monthly Spend Timeline
-                </span>
-                <span className="text-[10px] text-slate-400">
-                  Click any month to inspect breakdown
-                </span>
-              </div>
-
-              <div className="grid grid-cols-6 gap-1.5 sm:gap-2">
-                {past6Months.map((m) => {
-                  const isSelected = m.monthIndex === selectedMonth && m.year === selectedYear;
-                  const heightPct = maxSpendInPast6 > 0 ? Math.max(18, Math.round((m.spend / maxSpendInPast6) * 100)) : 18;
-
-                  return (
-                    <button
-                      key={`${m.year}-${m.monthIndex}`}
-                      type="button"
-                      onClick={() => setSelectedDate(new Date(m.year, m.monthIndex, 1))}
-                      className={`flex flex-col items-center justify-between p-2 rounded-xl transition-all cursor-pointer ${
-                        isSelected
-                          ? 'bg-[#2446D8] text-white shadow-sm ring-2 ring-[#2446D8]/20'
-                          : 'hover:bg-white dark:hover:bg-slate-700/80 text-slate-600 dark:text-slate-300'
-                      }`}
-                    >
-                      {/* Bar container */}
-                      <div className="w-full h-8 flex items-end justify-center mb-1">
-                        <div
-                          className={`w-3 sm:w-4 rounded-t-md transition-all ${
-                            isSelected
-                              ? 'bg-white'
-                              : m.spend > 0
-                              ? 'bg-[#2446D8]/60 dark:bg-[#2446D8]/80'
-                              : 'bg-slate-200 dark:bg-slate-700'
-                          }`}
-                          style={{ height: `${heightPct}%` }}
-                        />
-                      </div>
-                      <span className={`text-[10px] font-extrabold ${isSelected ? 'text-white' : 'text-slate-800 dark:text-slate-200'}`}>
-                        {m.shortName}
-                      </span>
-                      <span className={`text-[9px] font-semibold tracking-tight ${isSelected ? 'text-blue-100' : 'text-slate-400'}`}>
-                        {formatCurrency(m.spend, undefined, 0)}
-                      </span>
-                    </button>
-                  );
-                })}
+              {/* Monthly / Yearly Toggle Tabs */}
+              <div className="flex rounded-xl bg-slate-100 dark:bg-slate-800 p-0.5 border border-slate-200 dark:border-slate-700 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setSpendInterval('monthly')}
+                  className={`py-1 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    spendInterval === 'monthly'
+                      ? 'bg-[#2446D8] text-white shadow-xs'
+                      : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white'
+                  }`}
+                >
+                  Monthly
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSpendInterval('yearly')}
+                  className={`py-1 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    spendInterval === 'yearly'
+                      ? 'bg-[#2446D8] text-white shadow-xs'
+                      : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white'
+                  }`}
+                >
+                  Yearly
+                </button>
               </div>
             </div>
 
-            {/* Donut Chart & Legend */}
+            {/* Circular Donut Chart & Legend (No Bar Chart) */}
             <div className="grid grid-cols-1 sm:grid-cols-12 gap-6 items-center">
               <div className="sm:col-span-5 h-52 relative flex items-center justify-center">
                 <ResponsiveContainer width="100%" height="100%">
