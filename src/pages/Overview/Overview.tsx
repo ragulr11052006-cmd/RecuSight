@@ -19,6 +19,10 @@ import {
   Calendar,
   MoreVertical,
   ChevronRight,
+  ChevronLeft,
+  ChevronDown,
+  RotateCcw,
+  BarChart2,
   Layers,
   Sparkles,
   AlertCircle,
@@ -36,21 +40,60 @@ export const Overview: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
 
+  const now = new Date();
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(true);
   const [spendInterval, setSpendInterval] = useState<'monthly' | 'yearly'>('monthly');
-  const [selectedYear, setSelectedYear] = useState('2026');
+  const [selectedDate, setSelectedDate] = useState<Date>(() => new Date(now.getFullYear(), now.getMonth(), 1));
+  const [isMonthDropdownOpen, setIsMonthDropdownOpen] = useState(false);
   const [renewalFilter, setRenewalFilter] = useState<'all' | 'week' | 'month'>('all');
+  const monthPickerRef = React.useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     loadData();
   }, [user]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (monthPickerRef.current && !monthPickerRef.current.contains(event.target as Node)) {
+        setIsMonthDropdownOpen(false);
+      }
+    };
+    if (isMonthDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isMonthDropdownOpen]);
 
   const loadData = async () => {
     setLoading(true);
     const subs = await db.getSubscriptions(user?.id || 'default-user');
     setSubscriptions(subs);
     setLoading(false);
+  };
+
+  const MONTHS_LIST = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+
+  const selectedYear = selectedDate.getFullYear();
+  const selectedMonth = selectedDate.getMonth();
+  const selectedMonthName = MONTHS_LIST[selectedMonth];
+  const selectedMonthShortName = selectedMonthName.slice(0, 3);
+
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+  const isCurrentMonthSelected = selectedYear === currentYear && selectedMonth === currentMonth;
+
+  const handlePrevMonth = () => {
+    setSelectedDate((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
+  };
+
+  const handleNextMonth = () => {
+    setSelectedDate((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
   };
 
   // Dynamic Calculations (no hardcoding)
@@ -68,11 +111,54 @@ export const Overview: React.FC = () => {
     return calculateNormalizedMonthly(inUserCur, sub.billing_interval_unit, sub.billing_interval);
   };
 
-  const monthlyRunRate = allActiveCommitments.reduce((acc, curr) => acc + calculateSubscriptionMonthlyAmount(curr), 0);
-  const totalSpend = spendInterval === 'yearly' ? monthlyRunRate * 12 : monthlyRunRate;
+  // Helper to determine subscriptions active during a specific month
+  const getActiveSubsForMonth = (year: number, monthIdx: number, allSubs: Subscription[]) => {
+    const startOfMonth = new Date(year, monthIdx, 1, 0, 0, 0, 0);
+    const endOfMonth = new Date(year, monthIdx + 1, 0, 23, 59, 59, 999);
 
-  // Category Spend Distribution (strictly derived from database subscriptions)
-  const categoryMap: Record<string, { apps: number; amount: number; color: string }> = {};
+    return allSubs.filter((sub) => {
+      if (sub.status === 'paused') return false;
+
+      // If created with an explicit future date:
+      if (sub.created_at) {
+        const created = new Date(sub.created_at);
+        const createdMonthStart = new Date(created.getFullYear(), created.getMonth(), 1);
+        if (createdMonthStart > endOfMonth) {
+          const diffFromNowDays = Math.abs(now.getTime() - created.getTime()) / (1000 * 3600 * 24);
+          if (diffFromNowDays > 90) {
+            return false;
+          }
+        }
+      }
+
+      // If cancelled: check cancellation date
+      if (sub.status === 'cancelled') {
+        if (sub.updated_at) {
+          const cancelledAt = new Date(sub.updated_at);
+          if (cancelledAt < startOfMonth) {
+            return false;
+          }
+        } else {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  };
+
+  const selectedMonthActiveSubs = getActiveSubsForMonth(selectedYear, selectedMonth, allActiveCommitments);
+
+  const selectedMonthMonthlySpend = selectedMonthActiveSubs.reduce(
+    (acc, curr) => acc + calculateSubscriptionMonthlyAmount(curr),
+    0
+  );
+
+  const monthlyRunRate = allActiveCommitments.reduce((acc, curr) => acc + calculateSubscriptionMonthlyAmount(curr), 0);
+  const totalSpend = spendInterval === 'yearly' ? selectedMonthMonthlySpend * 12 : selectedMonthMonthlySpend;
+
+  // Category Spend Distribution for selected month
+  const categoryMap: Record<string, { apps: number; amount: number; color: string; subNames: string[] }> = {};
 
   const CATEGORY_COLORS: Record<string, string> = {
     'Design': '#2446D8',
@@ -91,7 +177,7 @@ export const Overview: React.FC = () => {
     'Other': '#64748B',
   };
 
-  allActiveCommitments.forEach((sub) => {
+  selectedMonthActiveSubs.forEach((sub) => {
     const cat = sub.category || 'Other';
     const subMonthly = calculateSubscriptionMonthlyAmount(sub);
     const subAmt = spendInterval === 'yearly' ? subMonthly * 12 : subMonthly;
@@ -100,10 +186,14 @@ export const Overview: React.FC = () => {
         apps: 0,
         amount: 0,
         color: CATEGORY_COLORS[cat] || '#64748B',
+        subNames: [],
       };
     }
     categoryMap[cat].apps += 1;
     categoryMap[cat].amount += subAmt;
+    if (!categoryMap[cat].subNames.includes(sub.merchant_name)) {
+      categoryMap[cat].subNames.push(sub.merchant_name);
+    }
   });
 
   const categoryEntries = Object.entries(categoryMap)
@@ -113,6 +203,7 @@ export const Overview: React.FC = () => {
       amount: data.amount,
       pct: totalSpend > 0 ? Math.round((data.amount / totalSpend) * 100) : 0,
       color: data.color,
+      subNames: data.subNames,
     }))
     .sort((a, b) => b.amount - a.amount);
 
@@ -129,11 +220,73 @@ export const Overview: React.FC = () => {
         }))
       : [{ name: 'No Spend', value: 1, color: isDarkMode ? '#334155' : '#E2E8F0' }];
 
-  // Upcoming renewals calculation
-  const now = new Date();
+  // 6-Month Timeline Strip ending at selected month (or current month)
+  const past6Months = Array.from({ length: 6 }).map((_, i) => {
+    const d = new Date(selectedYear, selectedMonth - 5 + i, 1);
+    const y = d.getFullYear();
+    const mIdx = d.getMonth();
+    const subsInMonth = getActiveSubsForMonth(y, mIdx, allActiveCommitments);
+    const mSpend = subsInMonth.reduce((acc, curr) => acc + calculateSubscriptionMonthlyAmount(curr), 0);
+    const finalSpend = spendInterval === 'yearly' ? mSpend * 12 : mSpend;
 
+    return {
+      date: d,
+      year: y,
+      monthIndex: mIdx,
+      name: MONTHS_LIST[mIdx],
+      shortName: MONTHS_LIST[mIdx].slice(0, 3),
+      spend: finalSpend,
+      activeCount: subsInMonth.length,
+    };
+  });
+
+  const maxSpendInPast6 = Math.max(...past6Months.map((m) => m.spend), 1);
+
+  // Month-over-month comparison vs immediately preceding month
+  const prevMonthDate = new Date(selectedYear, selectedMonth - 1, 1);
+  const prevMonthSubs = getActiveSubsForMonth(prevMonthDate.getFullYear(), prevMonthDate.getMonth(), allActiveCommitments);
+  const prevMonthMonthlySpend = prevMonthSubs.reduce((acc, curr) => acc + calculateSubscriptionMonthlyAmount(curr), 0);
+  const prevMonthSpend = spendInterval === 'yearly' ? prevMonthMonthlySpend * 12 : prevMonthMonthlySpend;
+  const prevMonthShortName = MONTHS_LIST[prevMonthDate.getMonth()].slice(0, 3);
+
+  let spendTrendBadge: { label: string; type: 'positive' | 'negative' | 'neutral' | 'empty' } = {
+    label: 'Baseline period',
+    type: 'neutral',
+  };
+
+  if (selectedMonthActiveSubs.length === 0 || totalSpend === 0) {
+    spendTrendBadge = {
+      label: `No spend in ${selectedMonthShortName}`,
+      type: 'empty',
+    };
+  } else if (prevMonthSpend === 0) {
+    spendTrendBadge = {
+      label: 'Baseline period',
+      type: 'neutral',
+    };
+  } else {
+    const diffPct = ((totalSpend - prevMonthSpend) / prevMonthSpend) * 100;
+    if (diffPct > 0) {
+      spendTrendBadge = {
+        label: `+${diffPct.toFixed(1)}% vs ${prevMonthShortName}`,
+        type: 'positive',
+      };
+    } else if (diffPct < 0) {
+      spendTrendBadge = {
+        label: `${diffPct.toFixed(1)}% vs ${prevMonthShortName}`,
+        type: 'negative',
+      };
+    } else {
+      spendTrendBadge = {
+        label: `0.0% vs ${prevMonthShortName}`,
+        type: 'neutral',
+      };
+    }
+  }
+
+  // Upcoming renewals calculation
   // 1. New subscriptions added this month from tracker
-  const newThisMonthCount = subscriptions.filter(s => {
+  const newThisMonthCount = subscriptions.filter((s) => {
     if (!s.created_at) return false;
     const d = new Date(s.created_at);
     return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
@@ -141,58 +294,12 @@ export const Overview: React.FC = () => {
   const newSubsBadgeCount = newThisMonthCount;
 
   // 2. Free trials ending soon (< 72 hours / 3 days) from tracker
-  const trialsEndingSoon = trialSubs.filter(s => {
+  const trialsEndingSoon = trialSubs.filter((s) => {
     if (!s.next_billing_date) return false;
     const diffDays = Math.ceil((new Date(s.next_billing_date).getTime() - now.getTime()) / (1000 * 3600 * 24));
     return diffDays >= 0 && diffDays <= 3;
   }).length;
   const trialExpiringCount = trialsEndingSoon;
-
-  // 3. Period-over-period spend trend calculation
-  const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const priorPeriodActiveSubs = activeSubs.filter((s) => {
-    if (!s.created_at) return true;
-    return new Date(s.created_at) < startOfCurrentMonth;
-  });
-  const priorPeriodMonthlySpend = priorPeriodActiveSubs.reduce(
-    (acc, curr) => acc + calculateSubscriptionMonthlyAmount(curr),
-    0
-  );
-
-  let spendTrendBadge: { label: string; type: 'positive' | 'negative' | 'neutral' | 'empty' } = {
-    label: 'No prior period data',
-    type: 'empty',
-  };
-
-  if (activeSubs.length === 0 || monthlyRunRate === 0) {
-    spendTrendBadge = {
-      label: 'No prior period data',
-      type: 'empty',
-    };
-  } else if (priorPeriodMonthlySpend === 0) {
-    spendTrendBadge = {
-      label: 'Baseline period',
-      type: 'neutral',
-    };
-  } else {
-    const diffPct = ((monthlyRunRate - priorPeriodMonthlySpend) / priorPeriodMonthlySpend) * 100;
-    if (diffPct > 0) {
-      spendTrendBadge = {
-        label: `+${diffPct.toFixed(1)}% vs last period`,
-        type: 'positive',
-      };
-    } else if (diffPct < 0) {
-      spendTrendBadge = {
-        label: `${diffPct.toFixed(1)}% vs last period`,
-        type: 'negative',
-      };
-    } else {
-      spendTrendBadge = {
-        label: '0.0% vs last period',
-        type: 'neutral',
-      };
-    }
-  }
 
   // 3. Upcoming renewals
   const allUpcoming = subscriptions
@@ -516,16 +623,23 @@ export const Overview: React.FC = () => {
           <div>
             <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-4">
               <div>
-                <h2 className="text-lg font-bold text-[#151B2D] dark:text-white">
-                  Spend Analysis
-                </h2>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-lg font-bold text-[#151B2D] dark:text-white">
+                    Spend Analysis
+                  </h2>
+                  {!isCurrentMonthSelected && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                      Viewing Past Period
+                    </span>
+                  )}
+                </div>
                 <p className="text-xs text-slate-400 mt-0.5">
                   Category distribution & verified recurring allocation breakdown
                 </p>
               </div>
 
-              {/* Period spend trend badge: Only show when user has active subscriptions and real spend history */}
-              {activeSubs.length > 0 && monthlyRunRate > 0 && spendTrendBadge.type !== 'empty' && (
+              {/* Dynamic spend trend badge */}
+              {selectedMonthActiveSubs.length > 0 && totalSpend > 0 && spendTrendBadge.type !== 'empty' && (
                 spendTrendBadge.type === 'positive' ? (
                   <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#E8F7EE] dark:bg-emerald-950/60 text-[#126639] dark:text-emerald-300 shrink-0">
                     <TrendingUp className="w-3 h-3" />
@@ -545,17 +659,18 @@ export const Overview: React.FC = () => {
             </div>
 
             {/* Run Rate & Filter Toggles */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
               <div className="flex items-baseline gap-2">
                 <span className="text-3xl lg:text-4xl font-black text-[#151B2D] dark:text-white tracking-tight">
                   {formatCurrency(totalSpend)}
                 </span>
                 <span className="text-xs text-slate-400 font-normal">
-                  / {spendInterval === 'yearly' ? 'year' : 'month'} run-rate
+                  / {spendInterval === 'yearly' ? `${selectedYear} annual run-rate` : `${selectedMonthName} ${selectedYear} spend`}
                 </span>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                {/* Monthly / Yearly Toggle */}
                 <div className="flex rounded-xl bg-slate-100 dark:bg-slate-800 p-0.5 border border-slate-200 dark:border-slate-700">
                   <button
                     type="button"
@@ -581,10 +696,164 @@ export const Overview: React.FC = () => {
                   </button>
                 </div>
 
-                <div className="flex items-center gap-1.5 py-1 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 shadow-xs">
-                  <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                  <span>2026</span>
+                {/* Interactive Month Stepper with Dropdown */}
+                <div ref={monthPickerRef} className="flex items-center gap-0.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-0.5 shadow-xs relative">
+                  <button
+                    type="button"
+                    onClick={handlePrevMonth}
+                    title="Previous month"
+                    className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white transition cursor-pointer"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsMonthDropdownOpen(!isMonthDropdownOpen)}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold text-slate-800 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition cursor-pointer"
+                  >
+                    <Calendar className="w-3.5 h-3.5 text-[#2446D8]" />
+                    <span>{selectedMonthName} {selectedYear}</span>
+                    <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${isMonthDropdownOpen ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleNextMonth}
+                    title="Next month"
+                    className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white transition cursor-pointer"
+                  >
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+
+                  {/* Dropdown Menu */}
+                  {isMonthDropdownOpen && (
+                    <div className="absolute top-full right-0 mt-2 z-50 w-64 bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-3 animate-in fade-in zoom-in-95 duration-100">
+                      <div className="flex items-center justify-between mb-2 pb-2 border-b border-slate-100 dark:border-slate-800">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedDate(new Date(selectedYear - 1, selectedMonth, 1))}
+                          className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500"
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                        </button>
+                        <span className="text-xs font-black text-slate-800 dark:text-white">{selectedYear}</span>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedDate(new Date(selectedYear + 1, selectedMonth, 1))}
+                          className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500"
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-1.5">
+                        {MONTHS_LIST.map((m, idx) => {
+                          const isSelected = selectedMonth === idx;
+                          const isCurrent = currentMonth === idx && currentYear === selectedYear;
+                          return (
+                            <button
+                              key={m}
+                              type="button"
+                              onClick={() => {
+                                setSelectedDate(new Date(selectedYear, idx, 1));
+                                setIsMonthDropdownOpen(false);
+                              }}
+                              className={`py-1.5 px-2 rounded-xl text-xs font-bold transition text-center cursor-pointer ${
+                                isSelected
+                                  ? 'bg-[#2446D8] text-white shadow-xs'
+                                  : isCurrent
+                                  ? 'bg-blue-50 dark:bg-blue-950/40 text-[#2446D8] dark:text-blue-300 border border-blue-200 dark:border-blue-800'
+                                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                              }`}
+                            >
+                              {m.slice(0, 3)}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {!isCurrentMonthSelected && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedDate(new Date(currentYear, currentMonth, 1));
+                            setIsMonthDropdownOpen(false);
+                          }}
+                          className="w-full mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px] font-bold text-[#2446D8] hover:underline flex items-center justify-center gap-1 cursor-pointer"
+                        >
+                          <RotateCcw className="w-3 h-3" />
+                          Jump to Current Month ({MONTHS_LIST[currentMonth].slice(0, 3)})
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
+
+                {/* Return to Current Month Pill (Visible when viewing past/future month) */}
+                {!isCurrentMonthSelected && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDate(new Date(currentYear, currentMonth, 1))}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-bold text-[#2446D8] bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition shrink-0 cursor-pointer"
+                    title="Return to current month"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    <span>Current</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Interactive Past 6 Months Trend Bar Strip */}
+            <div className="mb-5 p-3 bg-slate-50/80 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  Monthly Spend Timeline
+                </span>
+                <span className="text-[10px] text-slate-400">
+                  Click any month to inspect breakdown
+                </span>
+              </div>
+
+              <div className="grid grid-cols-6 gap-1.5 sm:gap-2">
+                {past6Months.map((m) => {
+                  const isSelected = m.monthIndex === selectedMonth && m.year === selectedYear;
+                  const heightPct = maxSpendInPast6 > 0 ? Math.max(18, Math.round((m.spend / maxSpendInPast6) * 100)) : 18;
+
+                  return (
+                    <button
+                      key={`${m.year}-${m.monthIndex}`}
+                      type="button"
+                      onClick={() => setSelectedDate(new Date(m.year, m.monthIndex, 1))}
+                      className={`flex flex-col items-center justify-between p-2 rounded-xl transition-all cursor-pointer ${
+                        isSelected
+                          ? 'bg-[#2446D8] text-white shadow-sm ring-2 ring-[#2446D8]/20'
+                          : 'hover:bg-white dark:hover:bg-slate-700/80 text-slate-600 dark:text-slate-300'
+                      }`}
+                    >
+                      {/* Bar container */}
+                      <div className="w-full h-8 flex items-end justify-center mb-1">
+                        <div
+                          className={`w-3 sm:w-4 rounded-t-md transition-all ${
+                            isSelected
+                              ? 'bg-white'
+                              : m.spend > 0
+                              ? 'bg-[#2446D8]/60 dark:bg-[#2446D8]/80'
+                              : 'bg-slate-200 dark:bg-slate-700'
+                          }`}
+                          style={{ height: `${heightPct}%` }}
+                        />
+                      </div>
+                      <span className={`text-[10px] font-extrabold ${isSelected ? 'text-white' : 'text-slate-800 dark:text-slate-200'}`}>
+                        {m.shortName}
+                      </span>
+                      <span className={`text-[9px] font-semibold tracking-tight ${isSelected ? 'text-blue-100' : 'text-slate-400'}`}>
+                        {formatCurrency(m.spend, undefined, 0)}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -609,13 +878,13 @@ export const Overview: React.FC = () => {
                 {/* Center Label in Donut matching screenshot */}
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                   <span className="text-[9px] uppercase font-bold text-slate-400 tracking-wider">
-                    TOTAL SPEND
+                    {selectedMonthShortName.toUpperCase()} SPEND
                   </span>
                   <span className="text-xl font-black text-[#151B2D] dark:text-white">
                     {formatCurrency(totalSpend, undefined, 0)}
                   </span>
                   <span className="text-[10px] font-bold text-emerald-600">
-                    Active
+                    {selectedMonthActiveSubs.length} Active {selectedMonthActiveSubs.length === 1 ? 'App' : 'Apps'}
                   </span>
                 </div>
               </div>
@@ -646,8 +915,12 @@ export const Overview: React.FC = () => {
                   ))
                 ) : (
                   <div className="py-6 text-center text-slate-400 space-y-1">
-                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">No active subscriptions yet</p>
-                    <p className="text-[11px] text-slate-400">Add an active subscription to see your category spend breakdown.</p>
+                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      No active subscriptions in {selectedMonthName} {selectedYear}
+                    </p>
+                    <p className="text-[11px] text-slate-400">
+                      Switch months or jump to the current period to view spend.
+                    </p>
                   </div>
                 )}
 
@@ -663,7 +936,9 @@ export const Overview: React.FC = () => {
 
           {/* Bottom active outflow ratio bar */}
           <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2 text-[10px] font-bold text-slate-400 overflow-x-auto">
-            <span className="uppercase tracking-wider shrink-0">ACTIVE OUTFLOW RATIO:</span>
+            <span className="uppercase tracking-wider shrink-0">
+              {selectedMonthShortName.toUpperCase()} OUTFLOW RATIO:
+            </span>
             {displayCategories.length > 0 ? (
               displayCategories.slice(0, 4).map((cat) => (
                 <span
@@ -678,7 +953,7 @@ export const Overview: React.FC = () => {
                 </span>
               ))
             ) : (
-              <span className="font-medium text-slate-400">No active category allocation</span>
+              <span className="font-medium text-slate-400">No active category allocation for this period</span>
             )}
           </div>
         </div>
