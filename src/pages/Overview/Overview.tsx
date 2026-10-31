@@ -111,31 +111,41 @@ export const Overview: React.FC = () => {
     return calculateNormalizedMonthly(inUserCur, sub.billing_interval_unit, sub.billing_interval);
   };
 
+  const getSubscriptionStartDate = (sub: Subscription): Date => {
+    if (sub.trial_start_date) {
+      const d = new Date(sub.trial_start_date);
+      if (!isNaN(d.getTime())) return d;
+    }
+    if (sub.created_at) {
+      const d = new Date(sub.created_at);
+      if (!isNaN(d.getTime())) return d;
+    }
+    // Fallback: If no date is recorded, treat as current date so newly added items don't leak into past months
+    return new Date();
+  };
+
   // Helper to determine subscriptions active during a specific month
   const getActiveSubsForMonth = (year: number, monthIdx: number, allSubs: Subscription[]) => {
     const startOfMonth = new Date(year, monthIdx, 1, 0, 0, 0, 0);
-    const endOfMonth = new Date(year, monthIdx + 1, 0, 23, 59, 59, 999);
 
     return allSubs.filter((sub) => {
       if (sub.status === 'paused') return false;
 
-      // If created with an explicit future date:
-      if (sub.created_at) {
-        const created = new Date(sub.created_at);
-        const createdMonthStart = new Date(created.getFullYear(), created.getMonth(), 1);
-        if (createdMonthStart > endOfMonth) {
-          const diffFromNowDays = Math.abs(now.getTime() - created.getTime()) / (1000 * 3600 * 24);
-          if (diffFromNowDays > 90) {
-            return false;
-          }
-        }
+      // 1. Creation / Start Month Check:
+      // The subscription must have started/been added on or before this target month!
+      const startDate = getSubscriptionStartDate(sub);
+      const startMonthDate = new Date(startDate.getFullYear(), startDate.getMonth(), 1, 0, 0, 0, 0);
+      if (startMonthDate > startOfMonth) {
+        return false;
       }
 
-      // If cancelled: check cancellation date
+      // 2. Cancellation Check:
+      // If cancelled, it is only excluded for months strictly after its cancellation month
       if (sub.status === 'cancelled') {
         if (sub.updated_at) {
           const cancelledAt = new Date(sub.updated_at);
-          if (cancelledAt < startOfMonth) {
+          const cancelMonthDate = new Date(cancelledAt.getFullYear(), cancelledAt.getMonth(), 1, 0, 0, 0, 0);
+          if (cancelMonthDate < startOfMonth) {
             return false;
           }
         } else {
@@ -822,7 +832,7 @@ export const Overview: React.FC = () => {
                       </div>
                       <div className="flex items-center gap-2.5">
                         <span className="text-slate-400 text-[11px] font-medium">
-                          {formatCurrency(spendInterval === 'yearly' ? item.amount * 12 : item.amount)}
+                          {formatCurrency(item.amount)}
                         </span>
                         <span className="font-bold text-slate-900 dark:text-white min-w-[32px] text-right">
                           {item.pct}%
@@ -838,6 +848,15 @@ export const Overview: React.FC = () => {
                     <p className="text-[11px] text-slate-400">
                       Switch months or jump to the current period to view spend.
                     </p>
+                    {!isCurrentMonthSelected && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedDate(new Date())}
+                        className="mt-2 text-xs font-bold text-[#2446D8] hover:underline cursor-pointer inline-flex items-center gap-1"
+                      >
+                        Return to Current Month ({MONTHS_LIST[currentMonth].slice(0, 3)} {currentYear})
+                      </button>
+                    )}
                   </div>
                 )}
 
@@ -849,29 +868,6 @@ export const Overview: React.FC = () => {
                 )}
               </div>
             </div>
-          </div>
-
-          {/* Bottom active outflow ratio bar */}
-          <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2 text-[10px] font-bold text-slate-400 overflow-x-auto">
-            <span className="uppercase tracking-wider shrink-0">
-              {selectedMonthShortName.toUpperCase()} OUTFLOW RATIO:
-            </span>
-            {displayCategories.length > 0 ? (
-              displayCategories.slice(0, 4).map((cat) => (
-                <span
-                  key={cat.name}
-                  className="px-2 py-0.5 rounded-full shrink-0 font-bold"
-                  style={{
-                    backgroundColor: `${cat.color}15`,
-                    color: cat.color,
-                  }}
-                >
-                  {cat.name}: {cat.pct}%
-                </span>
-              ))
-            ) : (
-              <span className="font-medium text-slate-400">No active category allocation for this period</span>
-            )}
           </div>
         </div>
 
