@@ -35,7 +35,7 @@ interface ExtractedCandidate {
   amount: number | null;
   currency: string;
   date: string | null;
-  cadence: 'monthly' | 'yearly' | 'unknown';
+  cadence: 'monthly' | 'yearly' | 'annually' | 'quarterly' | 'custom' | 'unknown';
   category: SubscriptionCategory;
   confidence: number;
   isDuplicate: boolean;
@@ -219,7 +219,8 @@ export const AddUploadInvoice: React.FC = () => {
 
     // 2. Create verified subscription record
     const numAmount = selectedCandidate.amount || 0;
-    const intervalUnit: BillingIntervalUnit = selectedCandidate.cadence === 'yearly' ? 'years' : 'months';
+    const intervalUnit: BillingIntervalUnit = selectedCandidate.cadence === 'yearly' || selectedCandidate.cadence === 'annually' ? 'years' : 'months';
+    const billingInterval = selectedCandidate.cadence === 'quarterly' ? 3 : 1;
 
     const created = await db.createSubscription({
       user_id: userId,
@@ -227,7 +228,7 @@ export const AddUploadInvoice: React.FC = () => {
       category: selectedCandidate.category,
       amount: numAmount,
       currency: selectedCandidate.currency as any,
-      billing_interval: 1,
+      billing_interval: billingInterval,
       billing_interval_unit: intervalUnit,
       next_billing_date: selectedCandidate.date || undefined,
       payment_mode_label: modeLabel,
@@ -568,6 +569,8 @@ export const AddUploadInvoice: React.FC = () => {
                         >
                           <option value="monthly">Monthly</option>
                           <option value="yearly">Annually</option>
+                          <option value="quarterly">Quarterly</option>
+                          <option value="custom">Custom</option>
                         </select>
                       </div>
                     </div>
