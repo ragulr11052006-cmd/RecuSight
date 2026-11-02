@@ -1086,13 +1086,13 @@ export const Overview: React.FC = () => {
                     key={sub.id}
                     className="p-3.5 rounded-xl hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors flex items-center justify-between border border-transparent hover:border-slate-100 dark:hover:border-slate-800"
                   >
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 min-w-0 flex-1 pr-3">
                       <MerchantLogo name={sub.merchant_name} size="sm" />
-                      <div>
-                        <h4 className="text-xs font-bold text-[#151B2D] dark:text-white">
+                      <div className="min-w-0 flex-1">
+                        <h4 className="text-xs font-bold text-[#151B2D] dark:text-white truncate">
                           {sub.merchant_name}
                         </h4>
-                        <span className="text-[10px] text-slate-400">
+                        <span className="text-[10px] text-slate-400 truncate block">
                           {sub.category} • <span className="font-semibold text-slate-600 dark:text-slate-300">{paymentSource}</span>
                         </span>
                         <span className={`text-[10px] font-semibold block sm:hidden mt-0.5 ${isExpired ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
@@ -1101,45 +1101,49 @@ export const Overview: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-4">
-                      <div className="text-right hidden sm:block">
-                        <span className="text-xs text-slate-600 dark:text-slate-300 block font-medium">
+                    <div className="flex items-center gap-4 shrink-0">
+                      {/* Renewal Date & Badge column - strictly aligned vertically */}
+                      <div className="hidden sm:flex flex-col items-center justify-center w-28 sm:w-32 shrink-0 text-center">
+                        <span className="text-xs text-slate-600 dark:text-slate-300 block font-semibold leading-tight">
                           {sub.next_billing_date || 'Nov 02, 2026'}
                         </span>
-                        {isExpired ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/50 border border-rose-200/80 dark:border-rose-900/60">
-                            <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
-                            <span>Expired</span>
-                          </span>
-                        ) : diffDays === 0 ? (
-                          <span className="inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/50 border border-amber-200/80 dark:border-amber-900/60">
-                            Renews Today
-                          </span>
-                        ) : (
-                          <span
-                            className={`inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                              isUrgent
-                                ? 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 border border-red-200/80 dark:border-red-900/60'
-                                : isWarning
-                                ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-900/60'
-                                : 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-900/60'
-                            }`}
-                          >
-                            in {diffDays} {diffDays === 1 ? 'day' : 'days'}
-                          </span>
-                        )}
+                        <div className="mt-1 flex items-center justify-center">
+                          {isExpired ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/50 border border-rose-200/80 dark:border-rose-900/60 whitespace-nowrap">
+                              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
+                              <span>Expired</span>
+                            </span>
+                          ) : diffDays === 0 ? (
+                            <span className="inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/50 border border-amber-200/80 dark:border-amber-900/60 whitespace-nowrap">
+                              Renews Today
+                            </span>
+                          ) : (
+                            <span
+                              className={`inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${
+                                isUrgent
+                                  ? 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 border border-red-200/80 dark:border-red-900/60'
+                                  : isWarning
+                                  ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-900/60'
+                                  : 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-900/60'
+                              }`}
+                            >
+                              in {diffDays} {diffDays === 1 ? 'day' : 'days'}
+                            </span>
+                          )}
+                        </div>
                       </div>
 
-                      <div className="text-right">
-                        <span className="text-sm font-bold text-[#151B2D] dark:text-white block">
+                      {/* Fixed-width Amount column so the date column never shifts */}
+                      <div className="w-24 sm:w-28 text-right shrink-0">
+                        <span className="text-sm font-bold text-[#151B2D] dark:text-white block leading-tight">
                           {formatCurrency(Number(sub.amount), sub.currency)}
                         </span>
-                        <span className="text-[10px] text-slate-400">
+                        <span className="text-[10px] text-slate-400 block mt-0.5">
                           /{sub.billing_interval_unit === 'years' ? 'year' : 'month'}
                         </span>
                       </div>
 
-                      <ChevronRight className="w-4 h-4 text-slate-300 dark:text-slate-600" />
+                      <ChevronRight className="w-4 h-4 text-slate-300 dark:text-slate-600 shrink-0" />
                     </div>
                   </div>
                 );
