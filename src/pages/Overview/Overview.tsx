@@ -46,7 +46,7 @@ export const Overview: React.FC = () => {
   const [spendInterval, setSpendInterval] = useState<'monthly' | 'yearly'>('monthly');
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date(now.getFullYear(), now.getMonth(), 1));
   const [isMonthDropdownOpen, setIsMonthDropdownOpen] = useState(false);
-  const [renewalFilter, setRenewalFilter] = useState<'all' | 'week' | 'month'>('all');
+  const [renewalFilter, setRenewalFilter] = useState<'all' | 'week' | 'month' | 'expired'>('all');
   const monthPickerRef = React.useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -289,6 +289,28 @@ export const Overview: React.FC = () => {
   }).length;
   const trialExpiringCount = trialsEndingSoon;
 
+  // Helper to determine if a subscription is expired
+  const isSubscriptionExpired = (s: Subscription): boolean => {
+    if (s.status === 'cancelled' || (s.status as string) === 'expired') {
+      return true;
+    }
+    const dateToCheck = s.status === 'trial' ? (s.trial_end_date || s.next_billing_date) : s.next_billing_date;
+    if (dateToCheck) {
+      let targetDate = new Date(dateToCheck).getTime();
+      if (isNaN(targetDate)) {
+        const withYear = new Date(`${dateToCheck}, ${now.getFullYear()}`).getTime();
+        if (!isNaN(withYear)) targetDate = withYear;
+      }
+      if (!isNaN(targetDate)) {
+        const today = new Date().setHours(0, 0, 0, 0);
+        if (targetDate < today) {
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+
   // 3. Upcoming renewals
   const allUpcoming = subscriptions
     .filter(s => s.next_billing_date && s.status !== 'cancelled')
@@ -304,9 +326,12 @@ export const Overview: React.FC = () => {
     return diffDays <= 30 && diffDays >= 0;
   });
 
+  const expiredUpcoming = allUpcoming.filter(s => isSubscriptionExpired(s));
+
   const filteredUpcoming =
     renewalFilter === 'week' ? weeklyUpcoming :
     renewalFilter === 'month' ? monthlyUpcoming :
+    renewalFilter === 'expired' ? expiredUpcoming :
     allUpcoming;
 
   const prefCur = user?.preferred_currency || 'USD';
@@ -891,8 +916,13 @@ export const Overview: React.FC = () => {
             <div className="space-y-4 max-h-[360px] overflow-y-auto pr-1">
               {trialSubs.length > 0 ? (
                 trialSubs.map((trial) => {
-                  const endsInDays = trial.next_billing_date
-                    ? Math.max(0, Math.ceil((new Date(trial.next_billing_date).getTime() - now.getTime()) / (1000 * 3600 * 24)))
+                  let trialDateMs = trial.next_billing_date ? new Date(trial.next_billing_date).getTime() : NaN;
+                  if (isNaN(trialDateMs) && trial.next_billing_date) {
+                    trialDateMs = new Date(`${trial.next_billing_date}, ${now.getFullYear()}`).getTime();
+                  }
+                  const isTrialExpired = !isNaN(trialDateMs) && trialDateMs < new Date().setHours(0, 0, 0, 0);
+                  const endsInDays = !isNaN(trialDateMs)
+                    ? Math.ceil((trialDateMs - now.getTime()) / (1000 * 3600 * 24))
                     : 3;
                   const paymentSourceDisplay =
                     trial.payment_mode_label ||
@@ -907,10 +937,17 @@ export const Overview: React.FC = () => {
                             <h4 className="text-sm font-bold text-[#151B2D] dark:text-white">
                               {trial.merchant_name}
                             </h4>
-                            <span className="text-[11px] font-bold text-red-600 dark:text-red-400 flex items-center gap-1">
-                              <ShieldAlert className="w-3 h-3 text-red-600 dark:text-red-400" />
-                              Ends in {endsInDays} {endsInDays === 1 ? 'Day' : 'Days'} ({trial.next_billing_date || 'Oct 31'})
-                            </span>
+                            {isTrialExpired ? (
+                              <span className="text-[11px] font-bold text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                                <ShieldAlert className="w-3 h-3 text-rose-600 dark:text-rose-400" />
+                                <span>Expired ({trial.next_billing_date || 'Past Due'})</span>
+                              </span>
+                            ) : (
+                              <span className="text-[11px] font-bold text-red-600 dark:text-red-400 flex items-center gap-1">
+                                <ShieldAlert className="w-3 h-3 text-red-600 dark:text-red-400" />
+                                <span>Ends in {endsInDays} {endsInDays === 1 ? 'Day' : 'Days'} ({trial.next_billing_date || 'Oct 31'})</span>
+                              </span>
+                            )}
                           </div>
                         </div>
                         <div className="text-right">
@@ -1015,16 +1052,31 @@ export const Overview: React.FC = () => {
             >
               Monthly ({monthlyUpcoming.length})
             </button>
+            <button
+              onClick={() => setRenewalFilter('expired')}
+              className={`shrink-0 whitespace-nowrap py-1 px-3 rounded-full text-xs font-semibold transition-all ${
+                renewalFilter === 'expired'
+                  ? 'bg-[#2446D8] text-white shadow-xs'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+              }`}
+            >
+              Expired <span className={`ml-0.5 font-bold ${renewalFilter === 'expired' ? 'text-white' : 'text-rose-600 dark:text-rose-400'}`}>({expiredUpcoming.length})</span>
+            </button>
           </div>
 
           <div className="space-y-3">
             {filteredUpcoming.length > 0 ? (
               filteredUpcoming.slice(0, 5).map((sub) => {
-                const diffDays = sub.next_billing_date
-                  ? Math.ceil((new Date(sub.next_billing_date).getTime() - now.getTime()) / (1000 * 3600 * 24))
+                let subDateMs = sub.next_billing_date ? new Date(sub.next_billing_date).getTime() : NaN;
+                if (isNaN(subDateMs) && sub.next_billing_date) {
+                  subDateMs = new Date(`${sub.next_billing_date}, ${now.getFullYear()}`).getTime();
+                }
+                const diffDays = !isNaN(subDateMs)
+                  ? Math.ceil((subDateMs - now.getTime()) / (1000 * 3600 * 24))
                   : 7;
-                const isUrgent = diffDays <= 1;
-                const isWarning = diffDays <= 5;
+                const isExpired = (!isNaN(subDateMs) && subDateMs < new Date().setHours(0, 0, 0, 0)) || isSubscriptionExpired(sub);
+                const isUrgent = !isExpired && diffDays <= 1;
+                const isWarning = !isExpired && diffDays <= 5;
                 const paymentSource =
                   sub.payment_mode_label ||
                   sub.payment_source?.display_name ||
@@ -1043,8 +1095,8 @@ export const Overview: React.FC = () => {
                         <span className="text-[10px] text-slate-400">
                           {sub.category} • <span className="font-semibold text-slate-600 dark:text-slate-300">{paymentSource}</span>
                         </span>
-                        <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 block sm:hidden mt-0.5">
-                          in {diffDays} {diffDays === 1 ? 'day' : 'days'} ({sub.next_billing_date || 'Nov 02'})
+                        <span className={`text-[10px] font-semibold block sm:hidden mt-0.5 ${isExpired ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                          {isExpired ? 'Expired' : diffDays === 0 ? 'Renews Today' : `in ${diffDays} ${diffDays === 1 ? 'day' : 'days'}`} ({sub.next_billing_date || 'Nov 02'})
                         </span>
                       </div>
                     </div>
@@ -1054,17 +1106,28 @@ export const Overview: React.FC = () => {
                         <span className="text-xs text-slate-600 dark:text-slate-300 block font-medium">
                           {sub.next_billing_date || 'Nov 02, 2026'}
                         </span>
-                        <span
-                          className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${
-                            isUrgent
-                              ? 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40'
-                              : isWarning
-                              ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40'
-                              : 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40'
-                          }`}
-                        >
-                          in {diffDays} {diffDays === 1 ? 'day' : 'days'}
-                        </span>
+                        {isExpired ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/50 border border-rose-200/80 dark:border-rose-900/60">
+                            <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
+                            <span>Expired</span>
+                          </span>
+                        ) : diffDays === 0 ? (
+                          <span className="inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/50 border border-amber-200/80 dark:border-amber-900/60">
+                            Renews Today
+                          </span>
+                        ) : (
+                          <span
+                            className={`inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                              isUrgent
+                                ? 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 border border-red-200/80 dark:border-red-900/60'
+                                : isWarning
+                                ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-900/60'
+                                : 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-900/60'
+                            }`}
+                          >
+                            in {diffDays} {diffDays === 1 ? 'day' : 'days'}
+                          </span>
+                        )}
                       </div>
 
                       <div className="text-right">
