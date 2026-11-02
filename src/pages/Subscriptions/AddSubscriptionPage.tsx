@@ -10,6 +10,7 @@ import {
   Subscription,
   SubscriptionCategory,
   BillingIntervalUnit,
+  DeliveryChannel,
   PaymentSource,
   Currency,
   CURRENCY_SYMBOLS,
@@ -50,7 +51,7 @@ import {
 } from 'lucide-react';
 
 export const AddSubscriptionPage: React.FC = () => {
-  const { user } = useAuth();
+  const { user, updateProfile } = useAuth();
   const { theme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
@@ -149,6 +150,19 @@ export const AddSubscriptionPage: React.FC = () => {
   const [manualTargetEmail, setManualTargetEmail] = useState(true);
   const [manualTargetInApp, setManualTargetInApp] = useState(false);
   const [manualTargetSMS, setManualTargetSMS] = useState(false);
+  const [targetEmail, setTargetEmail] = useState(user?.email || '');
+  const [targetPhone, setTargetPhone] = useState(user?.phone_number || '');
+
+  useEffect(() => {
+    if (user?.email && !targetEmail) {
+      setTargetEmail(user.email);
+    }
+    if (user?.phone_number && !targetPhone) {
+      setTargetPhone(user.phone_number);
+    }
+  }, [user]);
+
+  const displayEmail = targetEmail || user?.email || 'your-email@company.com';
   const [isTrial, setIsTrial] = useState(false);
   const [trialEndDate, setTrialEndDate] = useState('');
 
@@ -578,18 +592,18 @@ export const AddSubscriptionPage: React.FC = () => {
     }
 
     // 4. Create Reminder
-    if (created && formRenewalDate) {
-      const reminderTime = new Date(formRenewalDate);
+    if (created && validNextDate) {
+      const reminderTime = new Date(validNextDate);
       reminderTime.setDate(reminderTime.getDate() - 2);
       await db.createReminder({
         user_id: userId,
         subscription_id: created.id,
         scheduled_at: reminderTime.toISOString(),
         reminder_type: 'renewal_notice',
-        delivery_channel: 'in_app',
+        delivery_channel: 'email',
         status: 'scheduled',
-        timezone: 'EST',
-        notes: `Extracted reminder for ${formMerchantName}`,
+        timezone: user?.timezone || 'Asia/Kolkata',
+        notes: `Renewal alert for ${formMerchantName} sent to ${user?.email || 'user email'}`,
       });
     }
 
@@ -679,18 +693,71 @@ export const AddSubscriptionPage: React.FC = () => {
       });
 
       if (created && validNextDate) {
-        const reminderTime = new Date(validNextDate);
-        reminderTime.setDate(reminderTime.getDate() - 2);
-        await db.createReminder({
-          user_id: user?.id || 'default-user',
-          subscription_id: created.id,
-          scheduled_at: reminderTime.toISOString(),
-          reminder_type: isTrial ? 'trial_expiry' : 'renewal_notice',
-          delivery_channel: manualTargetEmail ? 'email' : 'in_app',
-          status: 'scheduled',
-          timezone: 'EST',
-          notes: `Manual alert for ${manualMerchantName.trim()}`,
-        });
+        const channels: DeliveryChannel[] = [];
+        if (manualTargetEmail) channels.push('email');
+        if (manualTargetSMS) channels.push('sms');
+        if (manualTargetInApp || channels.length === 0) channels.push('in_app');
+
+        const userTimezone = user?.timezone || 'Asia/Kolkata';
+        const chosenEmail = targetEmail.trim() || user?.email || 'user@example.com';
+        const chosenPhone = targetPhone.trim() || user?.phone_number || '';
+
+        // 1. Alert 7 days before renewal
+        if (manualAlert7Days) {
+          const reminder7 = new Date(validNextDate);
+          reminder7.setDate(reminder7.getDate() - 7);
+          for (const ch of channels) {
+            await db.createReminder({
+              user_id: user?.id || 'default-user',
+              subscription_id: created.id,
+              scheduled_at: reminder7.toISOString(),
+              reminder_type: isTrial ? 'trial_expiry' : 'renewal_notice',
+              delivery_channel: ch,
+              status: 'scheduled',
+              timezone: userTimezone,
+              notes: `7-day alert for ${manualMerchantName.trim()} to ${ch === 'email' ? chosenEmail : ch === 'sms' ? (chosenPhone || 'SMS') : 'In-App'}`,
+            });
+          }
+        }
+
+        // 2. Alert 2 days before renewal
+        if (manualAlert2Days) {
+          const reminder2 = new Date(validNextDate);
+          reminder2.setDate(reminder2.getDate() - 2);
+          for (const ch of channels) {
+            await db.createReminder({
+              user_id: user?.id || 'default-user',
+              subscription_id: created.id,
+              scheduled_at: reminder2.toISOString(),
+              reminder_type: isTrial ? 'trial_expiry' : 'renewal_notice',
+              delivery_channel: ch,
+              status: 'scheduled',
+              timezone: userTimezone,
+              notes: `2-day alert for ${manualMerchantName.trim()} to ${ch === 'email' ? chosenEmail : ch === 'sms' ? (chosenPhone || 'SMS') : 'In-App'}`,
+            });
+          }
+        }
+
+        // 3. Alert on renewal charge confirmation (same day)
+        if (manualAlertConfirmation) {
+          const reminder0 = new Date(validNextDate);
+          for (const ch of channels) {
+            await db.createReminder({
+              user_id: user?.id || 'default-user',
+              subscription_id: created.id,
+              scheduled_at: reminder0.toISOString(),
+              reminder_type: 'renewal_notice',
+              delivery_channel: ch,
+              status: 'scheduled',
+              timezone: userTimezone,
+              notes: `Charge confirmation alert for ${manualMerchantName.trim()} to ${ch === 'email' ? chosenEmail : ch === 'sms' ? (chosenPhone || 'SMS') : 'In-App'}`,
+            });
+          }
+        }
+
+        if (targetPhone.trim() && !user?.phone_number && updateProfile) {
+          updateProfile({ phone_number: targetPhone.trim() }).catch(() => {});
+        }
       }
 
       setIsSaving(false);
@@ -1992,46 +2059,107 @@ export const AddSubscriptionPage: React.FC = () => {
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-2">
                   TARGET CHANNELS
                 </span>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
                     onClick={() => setManualTargetEmail(!manualTargetEmail)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold border flex items-center gap-1.5 ${
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold border flex items-center gap-1.5 cursor-pointer transition-all ${
                       manualTargetEmail
-                        ? 'border-[#2446D8] text-[#2446D8] dark:border-blue-500 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50'
-                        : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800'
+                        ? 'border-[#2446D8] text-[#2446D8] dark:border-blue-500 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50 shadow-xs'
+                        : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:border-slate-300'
                     }`}
                   >
                     <Mail className="w-3.5 h-3.5" />
-                    <span>{user?.email || 'your-email@company.com'}</span>
+                    <span>{displayEmail}</span>
+                    {manualTargetEmail && <Check className="w-3 h-3 text-[#2446D8] dark:text-blue-400 ml-0.5" />}
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setManualTargetInApp(!manualTargetInApp)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold border flex items-center gap-1.5 ${
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold border flex items-center gap-1.5 cursor-pointer transition-all ${
                       manualTargetInApp
-                        ? 'border-[#2446D8] text-[#2446D8] dark:border-blue-500 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50'
-                        : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800'
+                        ? 'border-[#2446D8] text-[#2446D8] dark:border-blue-500 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50 shadow-xs'
+                        : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:border-slate-300'
                     }`}
                   >
                     <Bell className="w-3.5 h-3.5" />
                     <span>In-App</span>
+                    {manualTargetInApp && <Check className="w-3 h-3 text-[#2446D8] dark:text-blue-400 ml-0.5" />}
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setManualTargetSMS(!manualTargetSMS)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold border flex items-center gap-1.5 ${
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold border flex items-center gap-1.5 cursor-pointer transition-all ${
                       manualTargetSMS
-                        ? 'border-[#2446D8] text-[#2446D8] dark:border-blue-500 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50'
-                        : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800'
+                        ? 'border-[#2446D8] text-[#2446D8] dark:border-blue-500 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50 shadow-xs'
+                        : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:border-slate-300'
                     }`}
                   >
                     <MessageSquare className="w-3.5 h-3.5" />
-                    <span>SMS</span>
+                    <span>SMS {targetPhone ? `(${targetPhone})` : ''}</span>
+                    {manualTargetSMS && <Check className="w-3 h-3 text-[#2446D8] dark:text-blue-400 ml-0.5" />}
                   </button>
                 </div>
+
+                {/* Email notification recipient configuration */}
+                {manualTargetEmail && (
+                  <div className="mt-2.5 p-3 rounded-2xl bg-blue-50/60 dark:bg-slate-800/60 border border-blue-200 dark:border-blue-900/50 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 animate-in fade-in">
+                    <div className="flex items-center gap-2">
+                      <Mail className="w-4 h-4 text-[#2446D8] dark:text-blue-400 shrink-0" />
+                      <div>
+                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">
+                          Reminder alerts delivery email
+                        </span>
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                          Scheduled reminder notices will be sent to this verified address
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="email"
+                        value={targetEmail}
+                        onChange={(e) => setTargetEmail(e.target.value)}
+                        placeholder={user?.email || 'your-email@company.com'}
+                        className="h-9 px-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#2446D8] w-full sm:w-64"
+                      />
+                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/60 px-2 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800 whitespace-nowrap">
+                        Verified Login
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* SMS mobile alert recipient configuration */}
+                {manualTargetSMS && (
+                  <div className="mt-2.5 p-3 rounded-2xl bg-blue-50/60 dark:bg-slate-800/60 border border-blue-200 dark:border-blue-900/50 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 animate-in fade-in">
+                    <div className="flex items-center gap-2">
+                      <Smartphone className="w-4 h-4 text-[#2446D8] dark:text-blue-400 shrink-0" />
+                      <div>
+                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">
+                          SMS alert mobile number
+                        </span>
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                          Instant SMS dispatch before renewal charges occur
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="tel"
+                        value={targetPhone}
+                        onChange={(e) => setTargetPhone(e.target.value)}
+                        placeholder="+91 98765 43210"
+                        className="h-9 px-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#2446D8] w-full sm:w-48"
+                      />
+                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/60 px-2 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800 whitespace-nowrap">
+                        SMS Active
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Contract & Cancellation Terms */}
