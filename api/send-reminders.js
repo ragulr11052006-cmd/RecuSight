@@ -1,6 +1,46 @@
 import nodemailer from 'nodemailer';
 import { createClient } from '@supabase/supabase-js';
 
+// Helper to send real SMS via Fast2SMS Gateway
+async function sendFast2SMS(phone, message) {
+  const apiKey = process.env.FAST2SMS_API_KEY;
+  if (!apiKey) {
+    return { success: false, reason: 'FAST2SMS_API_KEY not configured in environment' };
+  }
+
+  // Extract clean 10-digit Indian mobile number
+  const cleanPhone = String(phone).replace(/\D/g, '').slice(-10);
+  if (cleanPhone.length !== 10) {
+    return { success: false, reason: `Invalid 10-digit phone number: ${phone}` };
+  }
+
+  try {
+    const response = await fetch('https://www.fast2sms.com/dev/bulkV2', {
+      method: 'POST',
+      headers: {
+        authorization: apiKey.trim(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        route: 'q',
+        message,
+        language: 'english',
+        flash: 0,
+        numbers: cleanPhone,
+      }),
+    });
+
+    const result = await response.json();
+    return {
+      success: result.return === true,
+      messageId: result.request_id || null,
+      raw: result,
+    };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
 export default async function handler(req, res) {
   // Set CORS headers so frontend can trigger reminder checks directly
   res.setHeader('Access-Control-Allow-Credentials', true);
@@ -121,14 +161,24 @@ export default async function handler(req, res) {
           html: htmlContent,
         });
 
+        let smsStatus = 'none';
         if (alert.target_phone) {
-          console.log(`[RecurSight SMS Gateway] SMS notification dispatched to ${alert.target_phone} for ${merchant} (${daysLeft} days remaining)`);
+          const smsText = `🚨 RecurSight Alert: ${merchant} renews in ${daysLeft === 0 ? 'Today' : daysLeft === 1 ? '1 day' : daysLeft + ' days'} (${amount}). AutoPay active. Check dashboard to review or cancel.`;
+          const smsRes = await sendFast2SMS(alert.target_phone, smsText);
+          if (smsRes.success) {
+            smsStatus = 'sent';
+            console.log(`[Fast2SMS] Successfully delivered live SMS to ${alert.target_phone}`);
+          } else {
+            smsStatus = smsRes.reason || 'simulated';
+            console.log(`[RecurSight SMS Gateway] ${smsRes.reason || 'Simulated dispatch'} for ${alert.target_phone}`);
+          }
         }
 
         sentResults.push({
           merchant,
           targetEmail,
           targetPhone: alert.target_phone || null,
+          smsStatus,
           messageId: info.messageId,
           daysLeft,
           status: 'sent',
@@ -229,7 +279,19 @@ export default async function handler(req, res) {
       };
 
       try {
-        await transporter.sendMail(mailOptions);
+        // Dispatch SMS if channel is sms or notes specify phone
+        if (reminder.delivery_channel === 'sms' || (reminder.notes && reminder.notes.includes('+91'))) {
+          const userPhone = reminder.profiles?.phone_number || (reminder.notes?.match(/(\+91[\d\s]+|\d{10})/)?.[0]);
+          if (userPhone) {
+            await sendFast2SMS(userPhone, `🚨 RecurSight Alert: ${merchantName} renews on ${nextDate} (${amount}). Check dashboard to review or cancel.`);
+          }
+        }
+
+        // Dispatch Email if email channel or default
+        if (reminder.delivery_channel !== 'sms') {
+          await transporter.sendMail(mailOptions);
+        }
+
         sentCount++;
         sentIds.push(reminder.id);
 
