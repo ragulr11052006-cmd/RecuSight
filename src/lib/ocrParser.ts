@@ -11,7 +11,7 @@ export interface ParsedTransaction {
   date: string | null;
   renewalDate?: string | null;
   paymentSource?: string | null;
-  cadence: 'monthly' | 'yearly' | 'unknown';
+  cadence: 'monthly' | 'yearly' | 'annually' | 'quarterly' | 'custom' | 'unknown';
   category: SubscriptionCategory;
   confidence: number;
   isDuplicate: boolean;
@@ -1087,9 +1087,13 @@ export function extractTransactionsFromText(
   }
 
   // 3. Cadence Detection from Text
-  let detectedCadence: 'monthly' | 'yearly' | 'unknown' = 'unknown';
+  let detectedCadence: 'monthly' | 'yearly' | 'annually' | 'quarterly' | 'custom' | 'unknown' = 'unknown';
   if (/yearly|annual|annually|per\s*year|\/yr|\/year|12\s*months/i.test(text) || /annual|yearly/i.test(filename)) {
     detectedCadence = 'yearly';
+  } else if (/quarterly|every\s*3\s*months|\/quarter|per\s*quarter/i.test(text) || /quarterly/i.test(filename)) {
+    detectedCadence = 'quarterly';
+  } else if (/weekly|\/week|per\s*week|daily|\/day/i.test(text)) {
+    detectedCadence = 'custom';
   } else if (/monthly|per\s*month|\/mo|\/month|every\s*month/i.test(text) || /monthly/i.test(filename)) {
     detectedCadence = 'monthly';
   }
