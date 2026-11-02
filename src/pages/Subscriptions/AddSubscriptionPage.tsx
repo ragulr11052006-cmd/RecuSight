@@ -1310,7 +1310,7 @@ export const AddSubscriptionPage: React.FC = () => {
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {[
                     { id: 'monthly', title: 'Monthly', badge: '✓', sub: 'Every 30 days' },
-                    { id: 'annually', title: 'Annually', badge: '-18%', sub: 'Billed yearly' },
+                    { id: 'annually', title: 'Annually', badge: '', sub: 'Billed yearly' },
                     { id: 'quarterly', title: 'Quarterly', badge: '', sub: 'Every 3 mos' },
                     { id: 'custom', title: 'Custom', badge: '', sub: 'Weekly / days' },
                   ].map((cad) => (
