@@ -6,7 +6,6 @@ import { Currency, NotificationPreferences } from '../../types';
 import {
   User,
   Bell,
-  Globe,
   Moon,
   Sun,
   Shield,
@@ -26,7 +25,7 @@ import {
 
 export const Settings: React.FC = () => {
   const { user, updateProfile, signOut } = useAuth();
-  const { theme, toggleTheme, setTheme } = useTheme();
+  const { theme, setTheme } = useTheme();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [displayName, setDisplayName] = useState(user?.display_name || '');
@@ -457,18 +456,18 @@ export const Settings: React.FC = () => {
             </div>
             <div>
               <h2 className="text-sm font-bold text-slate-900 dark:text-white">Display & Theme</h2>
-              <p className="text-xs text-slate-400">Toggle between Light, Dark, or System mode</p>
+              <p className="text-xs text-slate-400">Toggle between Light and Dark mode</p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
             <button
               type="button"
               onClick={() => setTheme('light')}
-              className={`p-3 sm:p-3.5 rounded-2xl border text-center font-bold flex flex-row sm:flex-col items-center justify-center gap-2 transition-all ${
+              className={`p-3.5 sm:p-4 rounded-2xl border text-center font-bold flex items-center justify-center gap-2.5 transition-all ${
                 theme === 'light'
                   ? 'bg-blue-50/50 dark:bg-blue-950/40 border-[#2446D8] dark:border-blue-500 text-[#2446D8] dark:text-blue-400 shadow-sm'
-                  : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'
+                  : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600'
               }`}
             >
               <Sun className="w-4 h-4 shrink-0" />
@@ -478,23 +477,14 @@ export const Settings: React.FC = () => {
             <button
               type="button"
               onClick={() => setTheme('dark')}
-              className={`p-3 sm:p-3.5 rounded-2xl border text-center font-bold flex flex-row sm:flex-col items-center justify-center gap-2 transition-all ${
+              className={`p-3.5 sm:p-4 rounded-2xl border text-center font-bold flex items-center justify-center gap-2.5 transition-all ${
                 theme === 'dark'
                   ? 'bg-blue-50/50 dark:bg-blue-950/40 border-[#2446D8] dark:border-blue-500 text-[#2446D8] dark:text-blue-400 shadow-sm'
-                  : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'
+                  : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600'
               }`}
             >
               <Moon className="w-4 h-4 shrink-0" />
               <span>Dark Mode</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => toggleTheme()}
-              className="p-3 sm:p-3.5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-center font-bold flex flex-row sm:flex-col items-center justify-center gap-2"
-            >
-              <Globe className="w-4 h-4 shrink-0" />
-              <span>Quick Toggle</span>
             </button>
           </div>
         </div>
