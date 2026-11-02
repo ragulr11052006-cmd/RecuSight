@@ -7,6 +7,7 @@ import { parseDocument } from '../../lib/ocrParser';
 import {
   SubscriptionCategory,
   BillingIntervalUnit,
+  DeliveryChannel,
   PaymentSource,
 } from '../../types';
 import {
@@ -26,6 +27,10 @@ import {
   FileImage,
   ArrowLeft,
   Calendar,
+  Mail,
+  Bell,
+  MessageSquare,
+  Smartphone,
 } from 'lucide-react';
 
 interface ExtractedCandidate {
@@ -60,6 +65,24 @@ export const AddUploadInvoice: React.FC = () => {
   const [selectedCandidate, setSelectedCandidate] = useState<ExtractedCandidate | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [unconfirmedEstimate, setUnconfirmedEstimate] = useState(true);
+
+  // Renewal Watchdog Triggers & Channels
+  const [alert7Days, setAlert7Days] = useState(true);
+  const [alert2Days, setAlert2Days] = useState(true);
+  const [alertConfirmation, setAlertConfirmation] = useState(false);
+  const [targetEmailChannel, setTargetEmailChannel] = useState(true);
+  const [targetInAppChannel, setTargetInAppChannel] = useState(false);
+  const [targetSMSChannel, setTargetSMSChannel] = useState(false);
+  const [targetEmail, setTargetEmail] = useState(user?.email || '');
+  const [targetPhone, setTargetPhone] = useState(user?.phone_number || '');
+  const [mandateRef, setMandateRef] = useState('');
+
+  React.useEffect(() => {
+    if (user?.email && !targetEmail) setTargetEmail(user.email);
+    if (user?.phone_number && !targetPhone) setTargetPhone(user.phone_number);
+  }, [user]);
+
+  const displayEmail = targetEmail || user?.email || 'your-email@company.com';
 
   // Candidates extracted from the document
   const [candidates, setCandidates] = useState<ExtractedCandidate[]>([]);
@@ -235,7 +258,9 @@ export const AddUploadInvoice: React.FC = () => {
       payment_mode_badge: modeBadge,
       status: unconfirmedEstimate ? 'needs_review' : 'active',
       confidence_status: unconfirmedEstimate ? 'unconfirmed_estimate' : 'verified',
-      notes: `Extracted from document: ${selectedCandidate.rawString}`,
+      notes: mandateRef.trim()
+        ? `Mandate Ref: ${mandateRef.trim()} | Extracted from document: ${selectedCandidate.rawString}`
+        : `Extracted from document: ${selectedCandidate.rawString}`,
     });
 
     // 3. Create extracted transaction record
@@ -256,6 +281,69 @@ export const AddUploadInvoice: React.FC = () => {
         is_recurring_candidate: true,
         review_status: 'confirmed',
       });
+    }
+
+    // 4. Create Scheduled Reminders
+    if (created && selectedCandidate.date) {
+      const channels: DeliveryChannel[] = [];
+      if (targetEmailChannel) channels.push('email');
+      if (targetSMSChannel) channels.push('sms');
+      if (targetInAppChannel || channels.length === 0) channels.push('in_app');
+
+      const userTimezone = user?.timezone || 'Asia/Kolkata';
+      const chosenEmail = targetEmail.trim() || user?.email || 'user@example.com';
+      const chosenPhone = targetPhone.trim() || user?.phone_number || '';
+      const validNextDate = selectedCandidate.date;
+
+      if (alert7Days) {
+        const reminder7 = new Date(validNextDate);
+        reminder7.setDate(reminder7.getDate() - 7);
+        for (const ch of channels) {
+          await db.createReminder({
+            user_id: userId,
+            subscription_id: created.id,
+            scheduled_at: reminder7.toISOString(),
+            reminder_type: 'renewal_notice',
+            delivery_channel: ch,
+            status: 'scheduled',
+            timezone: userTimezone,
+            notes: `7-day alert for ${selectedCandidate.merchantName} to ${ch === 'email' ? chosenEmail : ch === 'sms' ? (chosenPhone || 'SMS') : 'In-App'}`,
+          });
+        }
+      }
+
+      if (alert2Days) {
+        const reminder2 = new Date(validNextDate);
+        reminder2.setDate(reminder2.getDate() - 2);
+        for (const ch of channels) {
+          await db.createReminder({
+            user_id: userId,
+            subscription_id: created.id,
+            scheduled_at: reminder2.toISOString(),
+            reminder_type: 'renewal_notice',
+            delivery_channel: ch,
+            status: 'scheduled',
+            timezone: userTimezone,
+            notes: `2-day alert for ${selectedCandidate.merchantName} to ${ch === 'email' ? chosenEmail : ch === 'sms' ? (chosenPhone || 'SMS') : 'In-App'}`,
+          });
+        }
+      }
+
+      if (alertConfirmation) {
+        const reminder0 = new Date(validNextDate);
+        for (const ch of channels) {
+          await db.createReminder({
+            user_id: userId,
+            subscription_id: created.id,
+            scheduled_at: reminder0.toISOString(),
+            reminder_type: 'renewal_notice',
+            delivery_channel: ch,
+            status: 'scheduled',
+            timezone: userTimezone,
+            notes: `Renewal confirmation alert for ${selectedCandidate.merchantName} to ${ch === 'email' ? chosenEmail : ch === 'sms' ? (chosenPhone || 'SMS') : 'In-App'}`,
+          });
+        }
+      }
     }
 
     setIsSaving(false);
@@ -616,6 +704,167 @@ export const AddUploadInvoice: React.FC = () => {
                         placeholder="Not available in invoice — you may optionally link one"
                         className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-medium placeholder:text-slate-400"
                       />
+                    </div>
+
+                    {/* Mandate / SI Reference (Optional) */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                          Mandate / SI Reference (Optional)
+                        </label>
+                        <span className="text-[10px] text-slate-400 font-medium">Watchdog Token</span>
+                      </div>
+                      <input
+                        type="text"
+                        value={mandateRef}
+                        onChange={(e) => setMandateRef(e.target.value)}
+                        placeholder="e.g. UMN-99201-FGMA (Optional)"
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none"
+                      />
+                    </div>
+
+                    {/* Renewal Watchdog Triggers */}
+                    <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+                      <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1.5">
+                        Renewal Watchdog Triggers
+                      </label>
+                      <div className="space-y-1.5">
+                        <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-700 dark:text-slate-300">
+                          <input
+                            type="checkbox"
+                            checked={alert7Days}
+                            onChange={(e) => setAlert7Days(e.target.checked)}
+                            className="w-4 h-4 rounded text-[#2446D8]"
+                          />
+                          <span>Alert 7 days before renewal</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-700 dark:text-slate-300">
+                          <input
+                            type="checkbox"
+                            checked={alert2Days}
+                            onChange={(e) => setAlert2Days(e.target.checked)}
+                            className="w-4 h-4 rounded text-[#2446D8]"
+                          />
+                          <span>Alert 2 days before renewal</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-700 dark:text-slate-300">
+                          <input
+                            type="checkbox"
+                            checked={alertConfirmation}
+                            onChange={(e) => setAlertConfirmation(e.target.checked)}
+                            className="w-4 h-4 rounded text-[#2446D8]"
+                          />
+                          <span>Alert on renewal charge confirmation</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Target Channels */}
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-2">
+                        TARGET CHANNELS
+                      </span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setTargetEmailChannel(!targetEmailChannel)}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-semibold border flex items-center gap-1.5 cursor-pointer transition-all ${
+                            targetEmailChannel
+                              ? 'border-[#2446D8] text-[#2446D8] dark:border-blue-500 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50 shadow-xs'
+                              : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:border-slate-300'
+                          }`}
+                        >
+                          <Mail className="w-3.5 h-3.5" />
+                          <span>{displayEmail}</span>
+                          {targetEmailChannel && <Check className="w-3 h-3 text-[#2446D8] dark:text-blue-400 ml-0.5" />}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setTargetInAppChannel(!targetInAppChannel)}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-semibold border flex items-center gap-1.5 cursor-pointer transition-all ${
+                            targetInAppChannel
+                              ? 'border-[#2446D8] text-[#2446D8] dark:border-blue-500 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50 shadow-xs'
+                              : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:border-slate-300'
+                          }`}
+                        >
+                          <Bell className="w-3.5 h-3.5" />
+                          <span>In-App</span>
+                          {targetInAppChannel && <Check className="w-3 h-3 text-[#2446D8] dark:text-blue-400 ml-0.5" />}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setTargetSMSChannel(!targetSMSChannel)}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-semibold border flex items-center gap-1.5 cursor-pointer transition-all ${
+                            targetSMSChannel
+                              ? 'border-[#2446D8] text-[#2446D8] dark:border-blue-500 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50 shadow-xs'
+                              : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:border-slate-300'
+                          }`}
+                        >
+                          <MessageSquare className="w-3.5 h-3.5" />
+                          <span>SMS {targetPhone ? `(${targetPhone})` : ''}</span>
+                          {targetSMSChannel && <Check className="w-3 h-3 text-[#2446D8] dark:text-blue-400 ml-0.5" />}
+                        </button>
+                      </div>
+
+                      {/* Email recipient configuration */}
+                      {targetEmailChannel && (
+                        <div className="mt-2.5 p-3 rounded-2xl bg-blue-50/60 dark:bg-slate-800/60 border border-blue-200 dark:border-blue-900/50 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                          <div className="flex items-center gap-2">
+                            <Mail className="w-4 h-4 text-[#2446D8] dark:text-blue-400 shrink-0" />
+                            <div>
+                              <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">
+                                Reminder alerts delivery email
+                              </span>
+                              <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                                Scheduled reminder notices will be sent to this verified address
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="email"
+                              value={targetEmail}
+                              onChange={(e) => setTargetEmail(e.target.value)}
+                              placeholder={user?.email || 'your-email@company.com'}
+                              className="h-8 px-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-xs font-bold text-slate-900 dark:text-white focus:outline-none w-full sm:w-56"
+                            />
+                            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800 whitespace-nowrap">
+                              Verified
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* SMS recipient configuration */}
+                      {targetSMSChannel && (
+                        <div className="mt-2.5 p-3 rounded-2xl bg-blue-50/60 dark:bg-slate-800/60 border border-blue-200 dark:border-blue-900/50 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                          <div className="flex items-center gap-2">
+                            <Smartphone className="w-4 h-4 text-[#2446D8] dark:text-blue-400 shrink-0" />
+                            <div>
+                              <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">
+                                SMS alert mobile number
+                              </span>
+                              <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                                Instant SMS dispatch before renewal charges occur
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="tel"
+                              value={targetPhone}
+                              onChange={(e) => setTargetPhone(e.target.value)}
+                              placeholder="+91 98765 43210"
+                              className="h-8 px-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-xs font-bold text-slate-900 dark:text-white focus:outline-none w-full sm:w-44"
+                            />
+                            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800 whitespace-nowrap">
+                              Active
+                            </span>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Unconfirmed estimate toggle from Figma */}
