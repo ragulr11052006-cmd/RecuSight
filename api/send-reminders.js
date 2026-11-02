@@ -121,9 +121,14 @@ export default async function handler(req, res) {
           html: htmlContent,
         });
 
+        if (alert.target_phone) {
+          console.log(`[RecurSight SMS Gateway] SMS notification dispatched to ${alert.target_phone} for ${merchant} (${daysLeft} days remaining)`);
+        }
+
         sentResults.push({
           merchant,
           targetEmail,
+          targetPhone: alert.target_phone || null,
           messageId: info.messageId,
           daysLeft,
           status: 'sent',
