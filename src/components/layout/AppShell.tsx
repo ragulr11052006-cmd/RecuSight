@@ -83,15 +83,28 @@ export const AppShell: React.FC = () => {
 
     const loadNotifications = async () => {
       try {
-        const subs = await db.getSubscriptions(user.id);
+        const [subs, rems] = await Promise.all([
+          db.getSubscriptions(user.id),
+          db.getReminders(user.id),
+        ]);
         const alerts: AppNotification[] = [];
+        const emailsToDispatch: Array<{
+          merchant_name: string;
+          amount: number;
+          currency: Currency;
+          next_billing_date: string;
+          payment_mode_label: string;
+          target_email: string;
+          trigger_type: string;
+          days_remaining: number;
+        }> = [];
 
         subs.forEach((sub) => {
           if (sub.status === 'trial') {
             alerts.push({
               id: `trial-${sub.id}`,
               merchantName: sub.merchant_name,
-              title: `${sub.merchant_name} Trial Ending`,
+              title: `${sub.merchant_name} Free Trial Ending`,
               message: `Trial will renew at ${formatCurrencyAmount(sub.amount, user.preferred_currency || sub.currency || 'INR', sub.currency || 'INR')}. Cancel or revoke AutoPay if not needed.`,
               meta: `${sub.payment_mode_label || 'UPI AutoPay'} • ${formatCurrencyAmount(sub.amount, user.preferred_currency || sub.currency || 'INR', sub.currency || 'INR')}`,
               category: 'trials',
@@ -111,24 +124,90 @@ export const AppShell: React.FC = () => {
               unread: true,
               type: 'info',
             });
-          } else {
-            // Check if renewal is within 7 days
-            if (sub.next_billing_date) {
-              const diffMs = new Date(sub.next_billing_date).getTime() - Date.now();
-              const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-              if (diffDays <= 7 && diffDays >= 0) {
-                alerts.push({
-                  id: `renewal-${sub.id}`,
-                  merchantName: sub.merchant_name,
-                  title: `${sub.merchant_name} Renewal Alert`,
-                  message: `Watchdog trigger: Renews in ${diffDays === 0 ? 'Today' : diffDays + ' days'} (${formatCurrencyAmount(sub.amount, user.preferred_currency || sub.currency || 'INR', sub.currency || 'INR')}).`,
-                  meta: `${sub.payment_mode_label || 'UPI AutoPay'} • ${new Date(sub.next_billing_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
-                  category: 'renewals',
-                  timeAgo: '1d ago',
-                  unread: true,
-                  type: 'info',
+          } else if (sub.next_billing_date) {
+            const diffMs = new Date(sub.next_billing_date).getTime() - Date.now();
+            const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+            // Check configured reminder rules for this subscription
+            const subReminders = rems.filter((r) => r.subscription_id === sub.id);
+            const has7DayRule = subReminders.some((r) => r.notes?.includes('7-day')) || subReminders.length === 0;
+            const has2DayRule = subReminders.some((r) => r.notes?.includes('2-day')) || subReminders.length === 0;
+
+            // 1. Critical 2-Day Alert Threshold
+            if (diffDays <= 2 && diffDays > 0 && has2DayRule) {
+              const triggerType = '2-day';
+              alerts.push({
+                id: `renewal-2day-${sub.id}`,
+                merchantName: sub.merchant_name,
+                title: `🚨 ${sub.merchant_name} Renews in ${diffDays === 1 ? '1 Day' : '2 Days'}`,
+                message: `Critical 2-day alert: ${formatCurrencyAmount(sub.amount, user.preferred_currency || sub.currency || 'INR', sub.currency || 'INR')} auto-debit scheduled soon. Review or cancel if not needed.`,
+                meta: `2-Day Watchdog Trigger • ${sub.payment_mode_label || 'AutoPay'}`,
+                category: 'renewals',
+                timeAgo: `${diffDays === 1 ? '1 day' : '2 days'} left`,
+                unread: true,
+                type: 'warning',
+              });
+
+              // Queue background email dispatch if not already sent for this cycle
+              const idempotencyKey = `recusight_sent_${sub.id}_2day_${sub.next_billing_date}`;
+              if (!sessionStorage.getItem(idempotencyKey)) {
+                emailsToDispatch.push({
+                  merchant_name: sub.merchant_name,
+                  amount: sub.amount,
+                  currency: sub.currency,
+                  next_billing_date: sub.next_billing_date,
+                  payment_mode_label: sub.payment_mode_label || 'UPI AutoPay',
+                  target_email: user.email || 'user@example.com',
+                  trigger_type: triggerType,
+                  days_remaining: diffDays,
                 });
+                sessionStorage.setItem(idempotencyKey, 'sent');
               }
+            }
+            // 2. 7-Day Alert Threshold
+            else if (diffDays <= 7 && diffDays > 2 && has7DayRule) {
+              const triggerType = '7-day';
+              alerts.push({
+                id: `renewal-7day-${sub.id}`,
+                merchantName: sub.merchant_name,
+                title: `⚠️ ${sub.merchant_name} Renews in ${diffDays} Days`,
+                message: `7-day renewal reminder: ${formatCurrencyAmount(sub.amount, user.preferred_currency || sub.currency || 'INR', sub.currency || 'INR')} on ${new Date(sub.next_billing_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}.`,
+                meta: `7-Day Watchdog Trigger • ${sub.payment_mode_label || 'AutoPay'}`,
+                category: 'renewals',
+                timeAgo: `${diffDays} days left`,
+                unread: true,
+                type: 'info',
+              });
+
+              // Queue background email dispatch if not already sent for this cycle
+              const idempotencyKey = `recusight_sent_${sub.id}_7day_${sub.next_billing_date}`;
+              if (!sessionStorage.getItem(idempotencyKey)) {
+                emailsToDispatch.push({
+                  merchant_name: sub.merchant_name,
+                  amount: sub.amount,
+                  currency: sub.currency,
+                  next_billing_date: sub.next_billing_date,
+                  payment_mode_label: sub.payment_mode_label || 'UPI AutoPay',
+                  target_email: user.email || 'user@example.com',
+                  trigger_type: triggerType,
+                  days_remaining: diffDays,
+                });
+                sessionStorage.setItem(idempotencyKey, 'sent');
+              }
+            }
+            // 3. Same-Day Charge Confirmation
+            else if (diffDays === 0) {
+              alerts.push({
+                id: `renewal-today-${sub.id}`,
+                merchantName: sub.merchant_name,
+                title: `⚡ ${sub.merchant_name} Renews Today`,
+                message: `Charge confirmation: ${formatCurrencyAmount(sub.amount, user.preferred_currency || sub.currency || 'INR', sub.currency || 'INR')} scheduled for auto-debit today.`,
+                meta: `Renewal Day • ${sub.payment_mode_label || 'AutoPay'}`,
+                category: 'renewals',
+                timeAgo: 'Today',
+                unread: true,
+                type: 'info',
+              });
             }
           }
         });
@@ -147,6 +226,17 @@ export const AppShell: React.FC = () => {
         });
 
         setNotifications(alerts);
+
+        // Dispatch email notices for nearing subscriptions in the background
+        if (emailsToDispatch.length > 0) {
+          fetch('/api/send-reminders', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ alerts: emailsToDispatch }),
+          }).catch((err) => {
+            console.warn('Background reminder email dispatch notice:', err);
+          });
+        }
       } catch (err) {
         console.error('Error loading notifications:', err);
       }
