@@ -217,7 +217,7 @@ export const Reminders: React.FC = () => {
     setDiagnosticAlert({
       show: true,
       channel: 'Email & In-Dashboard',
-      message: 'Diagnostic test alert successfully delivered to shubham@example.com and dashboard notification bell (8 items).',
+      message: `Diagnostic test alert successfully delivered to ${user?.email || 'your email'} and dashboard notification bell (8 items).`,
     });
     setShowDiagnosticModal(true);
   };
@@ -651,7 +651,7 @@ export const Reminders: React.FC = () => {
                       <span>Email Notifications</span>
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                     </div>
-                    <span className="text-[11px] text-slate-400">shubham@example.com</span>
+                    <span className="text-[11px] text-slate-400">{user?.email || 'user@example.com'}</span>
                   </div>
                 </div>
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
