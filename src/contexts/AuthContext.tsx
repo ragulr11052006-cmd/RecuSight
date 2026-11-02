@@ -119,7 +119,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const mapSupabaseUserToProfile = async (sbUser: any): Promise<UserProfile> => {
     if (supabase) {
       const { data } = await supabase.from('profiles').select('*').eq('id', sbUser.id).single();
-      if (data) return data as UserProfile;
+      if (data) {
+        return {
+          ...data,
+          email: data.email || sbUser.email || '',
+          phone_number: data.phone_number || sbUser.phone || '',
+          display_name: data.display_name || sbUser.user_metadata?.full_name || sbUser.user_metadata?.name || sbUser.email?.split('@')[0] || 'User',
+        } as UserProfile;
+      }
     }
     return {
       id: sbUser.id,
