@@ -59,6 +59,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 preferred_currency: 'INR',
                 timezone: 'Asia/Kolkata',
                 theme_preference: 'light',
+                phone_number: session.user.phone || session.user.user_metadata?.phone_number || '',
                 created_at: session.user.created_at || new Date().toISOString(),
                 updated_at: new Date().toISOString(),
               });
@@ -86,6 +87,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               preferred_currency: 'INR',
               timezone: 'Asia/Kolkata',
               theme_preference: 'light',
+              phone_number: session.user.phone || session.user.user_metadata?.phone_number || '',
               created_at: session.user.created_at || new Date().toISOString(),
               updated_at: new Date().toISOString(),
             });
@@ -393,7 +395,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!user) return;
     const updated = { ...user, ...updates, updated_at: new Date().toISOString() };
     if (isSupabaseConfigured && supabase) {
-      await supabase.from('profiles').update(updates).eq('id', user.id);
+      try {
+        await supabase.from('profiles').update(updates).eq('id', user.id);
+      } catch (err) {
+        console.warn('Supabase profile update warning:', err);
+      }
     }
     setUser(updated);
     localStorage.setItem('recusight_auth_user', JSON.stringify(updated));
