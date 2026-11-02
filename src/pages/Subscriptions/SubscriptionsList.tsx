@@ -68,10 +68,33 @@ export const SubscriptionsList: React.FC = () => {
     setLoading(false);
   };
 
+  // Helper to determine if a subscription is expired
+  const isSubscriptionExpired = (s: Subscription): boolean => {
+    if (s.status === 'cancelled' || (s.status as string) === 'expired') {
+      return true;
+    }
+    const dateToCheck = s.status === 'trial' ? (s.trial_end_date || s.next_billing_date) : s.next_billing_date;
+    if (dateToCheck) {
+      let targetDate = new Date(dateToCheck).getTime();
+      if (isNaN(targetDate)) {
+        const withYear = new Date(`${dateToCheck}, ${new Date().getFullYear()}`).getTime();
+        if (!isNaN(withYear)) targetDate = withYear;
+      }
+      if (!isNaN(targetDate)) {
+        const today = new Date().setHours(0, 0, 0, 0);
+        if (targetDate < today) {
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+
   // KPI Calculations
-  const allActiveCommitments = subscriptions.filter(s => s.status !== 'cancelled' && s.status !== 'paused');
-  const activeSubs = subscriptions.filter(s => s.status === 'active');
+  const allActiveCommitments = subscriptions.filter(s => s.status !== 'cancelled' && s.status !== 'paused' && !isSubscriptionExpired(s));
+  const activeSubs = subscriptions.filter(s => s.status === 'active' && !isSubscriptionExpired(s));
   const trialSubs = subscriptions.filter(s => s.status === 'trial');
+  const expiredSubs = subscriptions.filter(s => isSubscriptionExpired(s));
   const unconfirmedSubs = subscriptions.filter(s => s.status === 'needs_review' || s.confidence_status === 'unconfirmed_estimate');
 
   const calculateSubscriptionAmount = (sub: Subscription): number => {
@@ -91,7 +114,16 @@ export const SubscriptionsList: React.FC = () => {
       (s.payment_source?.display_name && s.payment_source.display_name.toLowerCase().includes(searchQuery.toLowerCase()));
 
     const matchesCategory = categoryFilter === 'All' || s.category === categoryFilter;
-    const matchesStatus = statusFilter === 'All' || s.status === statusFilter;
+    const matchesStatus =
+      statusFilter === 'All'
+        ? true
+        : statusFilter === 'expired'
+        ? isSubscriptionExpired(s)
+        : statusFilter === 'active'
+        ? (s.status === 'active' && !isSubscriptionExpired(s))
+        : statusFilter === 'paused'
+        ? (s.status === 'paused' || s.status === 'cancelled')
+        : s.status === statusFilter;
     const matchesCycle = cycleFilter === 'All' || s.billing_interval_unit.startsWith(cycleFilter.toLowerCase());
 
     return matchesSearch && matchesCategory && matchesStatus && matchesCycle;
@@ -122,6 +154,23 @@ export const SubscriptionsList: React.FC = () => {
   const handleTogglePause = async (sub: Subscription) => {
     const newStatus: SubscriptionStatus = sub.status === 'paused' ? 'active' : 'paused';
     await db.updateSubscription(sub.id, { status: newStatus });
+    setActionMenuOpenId(null);
+    loadSubscriptions();
+  };
+
+  const handleToggleExpired = async (sub: Subscription) => {
+    if (isSubscriptionExpired(sub)) {
+      const nextD = new Date();
+      nextD.setDate(nextD.getDate() + 30);
+      await db.updateSubscription(sub.id, {
+        status: 'active',
+        next_billing_date: nextD.toISOString().split('T')[0],
+      });
+    } else {
+      await db.updateSubscription(sub.id, {
+        status: 'expired',
+      });
+    }
     setActionMenuOpenId(null);
     loadSubscriptions();
   };
@@ -368,6 +417,18 @@ export const SubscriptionsList: React.FC = () => {
             >
               Free Trials <span className="ml-1 text-amber-600 dark:text-amber-400 font-bold">{trialSubs.length}</span>
             </button>
+
+            <button
+              type="button"
+              onClick={() => setStatusFilter('expired')}
+              className={`shrink-0 whitespace-nowrap py-1.5 px-3 sm:px-3.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+                statusFilter === 'expired'
+                  ? 'bg-[#2446D8] text-white shadow-xs'
+                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 border border-slate-200 dark:border-slate-700'
+              }`}
+            >
+              Expired <span className={`ml-1 font-bold ${statusFilter === 'expired' ? 'text-white' : 'text-rose-600 dark:text-rose-400'}`}>{expiredSubs.length}</span>
+            </button>
           </div>
 
           {/* Table / Grid view switcher */}
@@ -566,22 +627,23 @@ export const SubscriptionsList: React.FC = () => {
 
                       {/* Status */}
                       <td className="py-4 px-4 whitespace-nowrap">
-                        {sub.status === 'active' && (
+                        {isSubscriptionExpired(sub) ? (
+                          <span className="inline-block px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200/60 dark:border-rose-900/40">
+                            {sub.status === 'trial' ? 'Trial Expired' : 'Expired'}
+                          </span>
+                        ) : sub.status === 'active' ? (
                           <span className="inline-block px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-[#E8F7EE] dark:bg-emerald-950/50 text-[#126639] dark:text-emerald-300">
                             Active
                           </span>
-                        )}
-                        {sub.status === 'trial' && (
+                        ) : sub.status === 'trial' ? (
                           <span className="inline-block px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-[#FEF3C7] dark:bg-amber-950/50 text-[#92400E] dark:text-amber-300">
                             Free Trial
                           </span>
-                        )}
-                        {sub.status === 'paused' && (
+                        ) : sub.status === 'paused' ? (
                           <span className="inline-block px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-[#FEE2E2] dark:bg-red-950/40 text-[#991B1B] dark:text-red-300">
                             Inactive
                           </span>
-                        )}
-                        {sub.status === 'needs_review' && (
+                        ) : (
                           <span className="inline-block px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-[#F1EDFB] dark:bg-purple-950/50 text-[#5B3FB0] dark:text-purple-300">
                             Needs Review
                           </span>
@@ -635,6 +697,15 @@ export const SubscriptionsList: React.FC = () => {
                                   <span>Pause Tracking</span>
                                 </>
                               )}
+                            </button>
+                            <button
+                              onClick={() => {
+                                handleToggleExpired(sub);
+                              }}
+                              className="w-full flex items-center gap-2 px-4 py-2 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                            >
+                              <Clock className="w-3.5 h-3.5 text-rose-500" />
+                              <span>{isSubscriptionExpired(sub) ? 'Reactivate Subscription' : 'Mark as Expired'}</span>
                             </button>
                             <button
                               onClick={() => {
@@ -723,9 +794,28 @@ export const SubscriptionsList: React.FC = () => {
                         <h3 className="font-bold text-slate-900 dark:text-white text-sm">
                           {sub.merchant_name}
                         </h3>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300">
-                          {sub.category}
-                        </span>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300">
+                            {sub.category}
+                          </span>
+                          {isSubscriptionExpired(sub) ? (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200/60 dark:border-rose-900/40">
+                              {sub.status === 'trial' ? 'Trial Expired' : 'Expired'}
+                            </span>
+                          ) : sub.status === 'active' ? (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300">
+                              Active
+                            </span>
+                          ) : sub.status === 'trial' ? (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300">
+                              Free Trial
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                              {sub.status}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                     <span className="text-base font-black text-slate-900 dark:text-white">
@@ -869,7 +959,7 @@ export const SubscriptionsList: React.FC = () => {
               <div className="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-800">
                 <span className="text-slate-400">Status & Confidence:</span>
                 <span className="font-semibold uppercase text-slate-900 dark:text-white">
-                  {selectedSubForDetails.status} ({selectedSubForDetails.confidence_status})
+                  {isSubscriptionExpired(selectedSubForDetails) ? 'EXPIRED' : selectedSubForDetails.status} ({selectedSubForDetails.confidence_status})
                 </span>
               </div>
               {selectedSubForDetails.notes && (
