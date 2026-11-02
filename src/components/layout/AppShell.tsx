@@ -6,6 +6,7 @@ import { db } from '../../lib/supabase';
 import { CURRENCY_SYMBOLS, Currency } from '../../types';
 import { formatCurrencyAmount } from '../../lib/currency';
 import { Logo } from '../common/Logo';
+import { MerchantLogo } from '../common/MerchantLogo';
 import {
   LayoutDashboard,
   CreditCard,
@@ -566,17 +567,7 @@ export const AppShell: React.FC = () => {
                                 : 'bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/60 opacity-80'
                             }`}
                           >
-                            <div
-                              className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 ${
-                                n.category === 'trials'
-                                  ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400'
-                                  : n.category === 'renewals'
-                                  ? 'bg-blue-100 dark:bg-blue-950/60 text-[#2446D8] dark:text-blue-400'
-                                  : 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400'
-                              }`}
-                            >
-                              {n.merchantName ? n.merchantName.charAt(0) : 'R'}
-                            </div>
+                            <MerchantLogo name={n.merchantName || 'Subscription'} size="md" className="shrink-0" />
 
                             <div className="flex-1 min-w-0">
                               <div className="flex items-start justify-between gap-2">
