@@ -20,6 +20,8 @@ import {
   Sparkles,
   X,
   Image as ImageIcon,
+  Phone,
+  Smartphone,
 } from 'lucide-react';
 
 export const Settings: React.FC = () => {
@@ -31,6 +33,7 @@ export const Settings: React.FC = () => {
   const [avatarUrl, setAvatarUrl] = useState(user?.avatar_url || '');
   const [currency, setCurrency] = useState<Currency>(user?.preferred_currency || 'USD');
   const [timezone, setTimezone] = useState(user?.timezone || 'America/Los_Angeles');
+  const [phoneNumber, setPhoneNumber] = useState(user?.phone_number || '');
   const [showAvatarModal, setShowAvatarModal] = useState(false);
 
   const [prefs, setPrefs] = useState<NotificationPreferences>({
@@ -65,6 +68,7 @@ export const Settings: React.FC = () => {
       setAvatarUrl(user.avatar_url || '');
       setCurrency(user.preferred_currency || 'USD');
       setTimezone(user.timezone || 'UTC');
+      setPhoneNumber(user.phone_number || '');
       db.getNotificationPreferences(user.id).then(setPrefs);
     }
   }, [user]);
@@ -107,6 +111,7 @@ export const Settings: React.FC = () => {
       avatar_url: avatarUrl,
       preferred_currency: currency,
       timezone,
+      phone_number: phoneNumber.trim(),
     });
     await db.updateNotificationPreferences(user?.id || 'default-user', prefs);
     setSaveSuccess(true);
@@ -276,6 +281,28 @@ export const Settings: React.FC = () => {
             </div>
 
             <div>
+              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Phone className="w-3.5 h-3.5 text-[#2446D8] dark:text-blue-400" />
+                  <span>Mobile Number (SMS Target)</span>
+                </span>
+                <span className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 rounded-md border border-blue-200 dark:border-blue-900/40">
+                  Auto-fills Subscription SMS
+                </span>
+              </label>
+              <input
+                type="tel"
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value)}
+                placeholder="+91 98765 43210"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-[#2446D8]"
+              />
+              <p className="text-[10px] text-slate-400 mt-1">
+                Auto-populated in target channels when adding subscriptions
+              </p>
+            </div>
+
+            <div>
               <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
                 Preferred Currency
               </label>
@@ -291,7 +318,7 @@ export const Settings: React.FC = () => {
               </select>
             </div>
 
-            <div>
+            <div className="sm:col-span-2">
               <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
                 Timezone
               </label>
@@ -318,16 +345,16 @@ export const Settings: React.FC = () => {
               <Bell className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-sm font-bold text-slate-900 dark:text-white">Alert Delivery Schedule</h2>
-              <p className="text-xs text-slate-400">Configure delivery channels and alert thresholds</p>
+              <h2 className="text-sm font-bold text-slate-900 dark:text-white">Alert Delivery Schedule & Channels</h2>
+              <p className="text-xs text-slate-400">Configure delivery channels (Email, SMS, In-App) and alert thresholds</p>
             </div>
           </div>
 
           <div className="space-y-3 text-xs">
-            <label className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 cursor-pointer">
+            <label className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 cursor-pointer transition-colors hover:bg-slate-100/60 dark:hover:bg-slate-800">
               <div>
                 <span className="font-bold text-slate-900 dark:text-white block">Email Notifications</span>
-                <span className="text-slate-500 dark:text-slate-400">Receive advance warnings via email before renewal</span>
+                <span className="text-slate-500 dark:text-slate-400">Receive advance warnings via email before renewal ({user?.email || 'Login Email'})</span>
               </div>
               <input
                 type="checkbox"
@@ -337,7 +364,47 @@ export const Settings: React.FC = () => {
               />
             </label>
 
-            <label className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 cursor-pointer">
+            <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 space-y-2.5">
+              <label className="flex items-center justify-between cursor-pointer">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-1.5 rounded-xl bg-blue-100 dark:bg-blue-950/60 text-[#2446D8] dark:text-blue-400">
+                    <Smartphone className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="font-bold text-slate-900 dark:text-white block">SMS Text Message Alerts</span>
+                    <span className="text-slate-500 dark:text-slate-400">Receive instant mobile SMS alerts 7 days & 2 days before renewal</span>
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={prefs.sms_enabled}
+                  onChange={(e) => setPrefs({ ...prefs, sms_enabled: e.target.checked })}
+                  className="w-4 h-4 rounded text-[#2446D8]"
+                />
+              </label>
+
+              {prefs.sms_enabled && (
+                <div className="pt-2 border-t border-slate-200/70 dark:border-slate-700/70 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-500 dark:text-slate-400">SMS Target Destination:</span>
+                    <span className="font-bold text-slate-900 dark:text-white">
+                      {phoneNumber || user?.phone_number || 'No mobile number set'}
+                    </span>
+                  </div>
+                  {phoneNumber || user?.phone_number ? (
+                    <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800">
+                      Active Channel
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-md border border-amber-200 dark:border-amber-800">
+                      Please enter your mobile number in Profile above
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <label className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 cursor-pointer transition-colors hover:bg-slate-100/60 dark:hover:bg-slate-800">
               <div>
                 <span className="font-bold text-slate-900 dark:text-white block">In-App Command Bar Alerts</span>
                 <span className="text-slate-500 dark:text-slate-400">Display notifications inside dashboard header</span>
