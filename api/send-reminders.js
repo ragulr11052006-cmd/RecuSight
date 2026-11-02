@@ -2,7 +2,7 @@ import nodemailer from 'nodemailer';
 import { createClient } from '@supabase/supabase-js';
 
 export default async function handler(req, res) {
-  // Set CORS headers so frontend can trigger test emails directly
+  // Set CORS headers so frontend can trigger reminder checks directly
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -36,92 +36,113 @@ export default async function handler(req, res) {
     },
   });
 
-  // Verify SMTP Connection
-  try {
-    await transporter.verify();
-  } catch (authError) {
-    console.error('SMTP Auth Failed:', authError);
-    return res.status(500).json({
-      success: false,
-      error: `Failed to authenticate with Gmail SMTP: ${authError.message}. Make sure 2FA is enabled and your 16-character App Password is correct.`,
-    });
-  }
+  // 1. DIRECT ACTIVE ALERTS MODE: Frontend sends nearing renewals (2 days / 7 days before)
+  const incomingAlerts = req.body?.alerts || [];
+  if (Array.isArray(incomingAlerts) && incomingAlerts.length > 0) {
+    const sentResults = [];
 
-  // 1. TEST MODE: Send immediate confirmation test email
-  if (req.query.test === 'true' || req.body?.test === true) {
-    const targetRecipient = req.query.to || req.body?.to || gmailUser;
-    
-    const mailOptions = {
-      from: `"RecurSight Watchdog" <${gmailUser}>`,
-      to: targetRecipient,
-      subject: '🔔 RecurSight Watchdog Alert: Email Dispatch Verified!',
-      html: `
+    for (const alert of incomingAlerts) {
+      const targetEmail = alert.target_email || gmailUser;
+      const merchant = alert.merchant_name || 'Active Subscription';
+      const amount = alert.amount ? `${alert.currency || 'INR'} ${alert.amount}` : 'recurring charge';
+      const nextDate = alert.next_billing_date || 'Upcoming';
+      const rail = alert.payment_mode_label || 'AutoPay Mandate';
+      const trigger = alert.trigger_type || (alert.days_remaining <= 2 ? '2-day' : '7-day');
+      const daysLeft = alert.days_remaining !== undefined ? alert.days_remaining : trigger === '2-day' ? 2 : 7;
+
+      const isUrgent = daysLeft <= 2;
+      const subject = isUrgent
+        ? `🚨 Urgent Watchdog Alert: ${merchant} renews in ${daysLeft === 0 ? 'Today' : daysLeft === 1 ? '1 day' : daysLeft + ' days'} (${amount})`
+        : `⚠️ Reminder: ${merchant} renews in ${daysLeft} days (${amount})`;
+
+      const htmlContent = `
         <!DOCTYPE html>
         <html>
         <head>
           <meta charset="utf-8">
           <style>
-            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 20px; }
-            .card { max-width: 540px; margin: 0 auto; background: #ffffff; border-radius: 20px; border: 1px border #e2e8f0; padding: 32px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
-            .header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
-            .logo { width: 36px; height: 36px; border-radius: 10px; background: #2446d8; color: #ffffff; display: inline-flex; align-items: center; justify-content: center; font-weight: 800; font-size: 18px; }
-            h1 { font-size: 20px; font-weight: 800; color: #0f172a; margin: 0; }
-            p { font-size: 14px; line-height: 1.6; color: #334155; margin: 12px 0; }
-            .badge { display: inline-block; padding: 4px 10px; background: #ecfdf5; border: 1px solid #a7f3d0; color: #047857; font-size: 12px; font-weight: 700; border-radius: 8px; }
-            .details { background: #f8fafc; border-radius: 12px; padding: 16px; margin: 20px 0; border: 1px solid #e2e8f0; font-size: 13px; }
-            .btn { display: inline-block; background: #2446d8; color: #ffffff; text-decoration: none; padding: 10px 20px; border-radius: 10px; font-weight: 700; font-size: 13px; margin-top: 12px; }
-            .footer { font-size: 11px; color: #94a3b8; text-align: center; margin-top: 24px; border-top: 1px solid #f1f5f9; padding-top: 16px; }
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f8fafc; margin: 0; padding: 20px; }
+            .card { max-width: 520px; margin: 0 auto; background: #ffffff; border-radius: 20px; border: 1px solid #e2e8f0; padding: 30px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+            .badge { display: inline-block; padding: 4px 10px; border-radius: 8px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; }
+            .badge-urgent { background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; }
+            .badge-warning { background: #fffbeb; border: 1px solid #fde68a; color: #d97706; }
+            .details-box { background: #f8fafc; border-radius: 12px; padding: 16px; margin: 20px 0; border: 1px solid #e2e8f0; font-size: 13px; line-height: 1.8; color: #334155; }
+            .btn { display: inline-block; background: #2446d8; color: #ffffff; text-decoration: none; padding: 10px 20px; border-radius: 10px; font-weight: 700; font-size: 13px; }
+            .btn-outline { display: inline-block; background: #ffffff; color: #dc2626; border: 1px solid #fecaca; text-decoration: none; padding: 9px 18px; border-radius: 10px; font-weight: 700; font-size: 13px; margin-left: 10px; }
           </style>
         </head>
         <body>
           <div class="card">
-            <div class="header">
-              <div class="logo">R</div>
-              <div>
-                <h1>RecurSight Watchdog</h1>
-                <span class="badge">✓ Live Dispatch Active</span>
-              </div>
-            </div>
-            
-            <p>Hello,</p>
-            <p>Your <strong>Gmail SMTP connection is active & verified</strong>. RecurSight will dispatch automatic reminder notices directly to this address whenever upcoming renewal commitments or trial expirations approach.</p>
-            
-            <div class="details">
-              <strong>Dispatch Channel:</strong> Gmail SMTP (Free)<br>
-              <strong>Sender:</strong> ${gmailUser}<br>
-              <strong>Verified Target:</strong> ${targetRecipient}<br>
-              <strong>Watchdog Guard:</strong> 7-Day & 2-Day Alerts Active
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+              <span style="font-weight: 900; font-size: 16px; color: #2446d8;">RecurSight Watchdog</span>
+              <span class="badge ${isUrgent ? 'badge-urgent' : 'badge-warning'}">
+                ${isUrgent ? '2-Day Critical Alert' : '7-Day Notice'}
+              </span>
             </div>
 
-            <p>You can manage your notification thresholds, active subscriptions, and AutoPay mandates anytime on your dashboard.</p>
-            
-            <div style="text-align: center; margin-top: 24px;">
-              <a href="https://recu-sight-x7iz.vercel.app/reminders" class="btn">View Renewal Schedule →</a>
+            <h2 style="font-size: 18px; font-weight: 800; color: #0f172a; margin: 0 0 10px 0;">
+              ${merchant} Renews in ${daysLeft === 0 ? 'Today' : daysLeft === 1 ? '1 Day' : daysLeft + ' Days'}
+            </h2>
+
+            <p style="font-size: 14px; color: #475569; line-height: 1.6; margin: 0 0 16px 0;">
+              This is your scheduled watchdog alert for <strong>${merchant}</strong>. An upcoming recurring charge of <strong>${amount}</strong> is approaching.
+            </p>
+
+            <div class="details-box">
+              <div><strong>Service:</strong> ${merchant}</div>
+              <div><strong>Renewal Amount:</strong> ${amount}</div>
+              <div><strong>Next Billing Date:</strong> ${nextDate}</div>
+              <div><strong>Payment Rail:</strong> ${rail}</div>
+              <div><strong>Alert Rule:</strong> Notified ${daysLeft} days before renewal</div>
             </div>
 
-            <div class="footer">
-              RecurSight — Automated Subscription & Mandate Governance
+            <p style="font-size: 12px; color: #64748b; line-height: 1.5;">
+              If you wish to keep this subscription, no action is required — the AutoPay mandate will renew normally. If you do not want to renew, cancel or pause the mandate before the charge date.
+            </p>
+
+            <div style="margin-top: 24px; text-align: center;">
+              <a href="https://recu-sight-x7iz.vercel.app/subscriptions" class="btn">View Subscription</a>
+              <a href="https://recu-sight-x7iz.vercel.app/cancellation-guidance" class="btn-outline">Cancel Guidance</a>
+            </div>
+
+            <div style="margin-top: 28px; padding-top: 16px; border-top: 1px solid #f1f5f9; text-align: center; font-size: 11px; color: #94a3b8;">
+              RecurSight Automated Subscription & Mandate Watchdog • Delivery channel: Verified Email
             </div>
           </div>
         </body>
         </html>
-      `,
-    };
+      `;
 
-    try {
-      const info = await transporter.sendMail(mailOptions);
-      return res.status(200).json({
-        success: true,
-        message: `Test email sent successfully to ${targetRecipient}!`,
-        messageId: info.messageId,
-      });
-    } catch (sendError) {
-      console.error('Send error:', sendError);
-      return res.status(500).json({
-        success: false,
-        error: `Failed to send email: ${sendError.message}`,
-      });
+      try {
+        const info = await transporter.sendMail({
+          from: `"RecurSight Watchdog" <${gmailUser}>`,
+          to: targetEmail,
+          subject,
+          html: htmlContent,
+        });
+
+        sentResults.push({
+          merchant,
+          targetEmail,
+          messageId: info.messageId,
+          daysLeft,
+          status: 'sent',
+        });
+      } catch (err) {
+        console.error(`Error sending alert for ${merchant}:`, err);
+        sentResults.push({
+          merchant,
+          error: err.message,
+          status: 'failed',
+        });
+      }
     }
+
+    return res.status(200).json({
+      success: true,
+      dispatchedCount: sentResults.filter((r) => r.status === 'sent').length,
+      results: sentResults,
+    });
   }
 
   // 2. BATCH CRON MODE: Find due reminders in Supabase & dispatch
@@ -131,7 +152,7 @@ export default async function handler(req, res) {
   if (!supabaseUrl || !supabaseKey) {
     return res.status(200).json({
       success: true,
-      message: 'SMTP is active, but Supabase environment variables are missing for automatic batch lookup.',
+      message: 'SMTP is active. Ready to process direct alert payloads.',
     });
   }
 
