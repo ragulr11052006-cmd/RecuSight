@@ -95,6 +95,7 @@ export const AppShell: React.FC = () => {
           next_billing_date: string;
           payment_mode_label: string;
           target_email: string;
+          target_phone?: string;
           trigger_type: string;
           days_remaining: number;
         }> = [];
@@ -158,6 +159,7 @@ export const AppShell: React.FC = () => {
                   next_billing_date: sub.next_billing_date,
                   payment_mode_label: sub.payment_mode_label || 'UPI AutoPay',
                   target_email: user.email || 'user@example.com',
+                  target_phone: user.phone_number || '',
                   trigger_type: triggerType,
                   days_remaining: diffDays,
                 });
@@ -189,6 +191,7 @@ export const AppShell: React.FC = () => {
                   next_billing_date: sub.next_billing_date,
                   payment_mode_label: sub.payment_mode_label || 'UPI AutoPay',
                   target_email: user.email || 'user@example.com',
+                  target_phone: user.phone_number || '',
                   trigger_type: triggerType,
                   days_remaining: diffDays,
                 });
