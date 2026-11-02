@@ -134,6 +134,16 @@ export const AppShell: React.FC = () => {
             const has7DayRule = subReminders.some((r) => r.notes?.includes('7-day')) || subReminders.length === 0;
             const has2DayRule = subReminders.some((r) => r.notes?.includes('2-day')) || subReminders.length === 0;
 
+            // Resolve mobile number from profile or local user state
+            const resolvedPhone = user.phone_number || (() => {
+              try {
+                const raw = localStorage.getItem('recusight_auth_user');
+                return raw ? JSON.parse(raw).phone_number || '' : '';
+              } catch {
+                return '';
+              }
+            })();
+
             // 1. Critical 2-Day Alert Threshold
             if (diffDays <= 2 && diffDays > 0 && has2DayRule) {
               const triggerType = '2-day';
@@ -159,7 +169,7 @@ export const AppShell: React.FC = () => {
                   next_billing_date: sub.next_billing_date,
                   payment_mode_label: sub.payment_mode_label || 'UPI AutoPay',
                   target_email: user.email || 'user@example.com',
-                  target_phone: user.phone_number || '',
+                  target_phone: resolvedPhone,
                   trigger_type: triggerType,
                   days_remaining: diffDays,
                 });
@@ -191,7 +201,7 @@ export const AppShell: React.FC = () => {
                   next_billing_date: sub.next_billing_date,
                   payment_mode_label: sub.payment_mode_label || 'UPI AutoPay',
                   target_email: user.email || 'user@example.com',
-                  target_phone: user.phone_number || '',
+                  target_phone: resolvedPhone,
                   trigger_type: triggerType,
                   days_remaining: diffDays,
                 });
