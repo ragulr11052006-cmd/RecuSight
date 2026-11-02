@@ -155,13 +155,13 @@ export const AddSubscriptionPage: React.FC = () => {
   const [targetPhone, setTargetPhone] = useState(user?.phone_number || '');
 
   useEffect(() => {
-    if (user?.email && !targetEmail) {
+    if (user?.email && (!targetEmail || targetEmail === 'your-email@company.com')) {
       setTargetEmail(user.email);
     }
-    if (user?.phone_number && !targetPhone) {
+    if (user?.phone_number) {
       setTargetPhone(user.phone_number);
     }
-  }, [user]);
+  }, [user?.email, user?.phone_number]);
 
   const displayEmail = targetEmail || user?.email || 'your-email@company.com';
   const [isTrial, setIsTrial] = useState(false);
@@ -659,6 +659,10 @@ export const AddSubscriptionPage: React.FC = () => {
             notes: `Renewal charge confirmation alert for ${formMerchantName.trim()} to ${ch === 'email' ? chosenEmail : ch === 'sms' ? (chosenPhone || 'SMS') : 'In-App'}`,
           });
         }
+      }
+
+      if (targetPhone.trim() && !user?.phone_number && updateProfile) {
+        updateProfile({ phone_number: targetPhone.trim() }).catch(() => {});
       }
     }
 
@@ -1537,7 +1541,16 @@ export const AddSubscriptionPage: React.FC = () => {
 
                   <button
                     type="button"
-                    onClick={() => setManualTargetSMS(!manualTargetSMS)}
+                    onClick={() => {
+                      const nextVal = !manualTargetSMS;
+                      setManualTargetSMS(nextVal);
+                      if (nextVal) {
+                        const profilePhone = user?.phone_number || '';
+                        if (profilePhone && !targetPhone) {
+                          setTargetPhone(profilePhone);
+                        }
+                      }
+                    }}
                     className={`px-3 py-1.5 rounded-xl text-xs font-semibold border flex items-center gap-1.5 cursor-pointer transition-all ${
                       manualTargetSMS
                         ? 'border-[#2446D8] text-[#2446D8] dark:border-blue-500 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50 shadow-xs'
@@ -1545,7 +1558,7 @@ export const AddSubscriptionPage: React.FC = () => {
                     }`}
                   >
                     <MessageSquare className="w-3.5 h-3.5" />
-                    <span>SMS {targetPhone ? `(${targetPhone})` : ''}</span>
+                    <span>SMS {(targetPhone || user?.phone_number) ? `(${targetPhone || user?.phone_number})` : ''}</span>
                     {manualTargetSMS && <Check className="w-3 h-3 text-[#2446D8] dark:text-blue-400 ml-0.5" />}
                   </button>
                 </div>
@@ -1589,21 +1602,29 @@ export const AddSubscriptionPage: React.FC = () => {
                           SMS alert mobile number
                         </span>
                         <span className="text-[10px] text-slate-500 dark:text-slate-400">
-                          Instant SMS dispatch before renewal charges occur
+                          {(targetPhone || user?.phone_number) && (targetPhone || user?.phone_number) === user?.phone_number
+                            ? '✓ Auto-fetched from Profile'
+                            : 'Instant SMS dispatch before renewal charges occur'}
                         </span>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
                       <input
                         type="tel"
-                        value={targetPhone}
+                        value={targetPhone || user?.phone_number || ''}
                         onChange={(e) => setTargetPhone(e.target.value)}
                         placeholder="+91 98765 43210"
                         className="h-9 px-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#2446D8] w-full sm:w-48"
                       />
-                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/60 px-2 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800 whitespace-nowrap">
-                        SMS Active
-                      </span>
+                      {(targetPhone || user?.phone_number) && (targetPhone || user?.phone_number) === user?.phone_number ? (
+                        <span className="text-[10px] text-blue-700 dark:text-blue-300 font-bold bg-blue-100 dark:bg-blue-900/60 px-2 py-1 rounded-lg border border-blue-200 dark:border-blue-700 whitespace-nowrap">
+                          Profile Mobile
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/60 px-2 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800 whitespace-nowrap">
+                          SMS Active
+                        </span>
+                      )}
                     </div>
                   </div>
                 )}
@@ -2306,7 +2327,16 @@ export const AddSubscriptionPage: React.FC = () => {
 
                   <button
                     type="button"
-                    onClick={() => setManualTargetSMS(!manualTargetSMS)}
+                    onClick={() => {
+                      const nextVal = !manualTargetSMS;
+                      setManualTargetSMS(nextVal);
+                      if (nextVal) {
+                        const profilePhone = user?.phone_number || '';
+                        if (profilePhone && !targetPhone) {
+                          setTargetPhone(profilePhone);
+                        }
+                      }
+                    }}
                     className={`px-3 py-1.5 rounded-xl text-xs font-semibold border flex items-center gap-1.5 cursor-pointer transition-all ${
                       manualTargetSMS
                         ? 'border-[#2446D8] text-[#2446D8] dark:border-blue-500 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50 shadow-xs'
@@ -2314,7 +2344,7 @@ export const AddSubscriptionPage: React.FC = () => {
                     }`}
                   >
                     <MessageSquare className="w-3.5 h-3.5" />
-                    <span>SMS {targetPhone ? `(${targetPhone})` : ''}</span>
+                    <span>SMS {(targetPhone || user?.phone_number) ? `(${targetPhone || user?.phone_number})` : ''}</span>
                     {manualTargetSMS && <Check className="w-3 h-3 text-[#2446D8] dark:text-blue-400 ml-0.5" />}
                   </button>
                 </div>
@@ -2358,21 +2388,29 @@ export const AddSubscriptionPage: React.FC = () => {
                           SMS alert mobile number
                         </span>
                         <span className="text-[10px] text-slate-500 dark:text-slate-400">
-                          Instant SMS dispatch before renewal charges occur
+                          {(targetPhone || user?.phone_number) && (targetPhone || user?.phone_number) === user?.phone_number
+                            ? '✓ Auto-fetched from Profile'
+                            : 'Instant SMS dispatch before renewal charges occur'}
                         </span>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
                       <input
                         type="tel"
-                        value={targetPhone}
+                        value={targetPhone || user?.phone_number || ''}
                         onChange={(e) => setTargetPhone(e.target.value)}
                         placeholder="+91 98765 43210"
                         className="h-9 px-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#2446D8] w-full sm:w-48"
                       />
-                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/60 px-2 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800 whitespace-nowrap">
-                        SMS Active
-                      </span>
+                      {(targetPhone || user?.phone_number) && (targetPhone || user?.phone_number) === user?.phone_number ? (
+                        <span className="text-[10px] text-blue-700 dark:text-blue-300 font-bold bg-blue-100 dark:bg-blue-900/60 px-2 py-1 rounded-lg border border-blue-200 dark:border-blue-700 whitespace-nowrap">
+                          Profile Mobile
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/60 px-2 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800 whitespace-nowrap">
+                          SMS Active
+                        </span>
+                      )}
                     </div>
                   </div>
                 )}
