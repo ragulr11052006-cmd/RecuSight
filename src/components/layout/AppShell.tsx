@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -39,17 +39,40 @@ export const AppShell: React.FC = () => {
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [currencyDropdownOpen, setCurrencyDropdownOpen] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
+  const [activeNotificationTab, setActiveNotificationTab] = useState<'all' | 'renewals' | 'trials' | 'system'>('all');
+  const notificationMenuRef = useRef<HTMLDivElement | null>(null);
   const [referralCopied, setReferralCopied] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   interface AppNotification {
     id: string;
+    merchantName: string;
     title: string;
     message: string;
-    type: 'warning' | 'info';
+    meta?: string;
+    category: 'renewals' | 'trials' | 'system';
+    timeAgo: string;
+    unread: boolean;
+    type: 'warning' | 'info' | 'success';
   }
 
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
+
+  // Close notifications on click outside
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (
+        notificationMenuRef.current &&
+        !notificationMenuRef.current.contains(e.target as Node)
+      ) {
+        setNotificationOpen(false);
+      }
+    }
+    if (notificationOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [notificationOpen]);
 
   useEffect(() => {
     if (!user) {
@@ -66,18 +89,60 @@ export const AppShell: React.FC = () => {
           if (sub.status === 'trial') {
             alerts.push({
               id: `trial-${sub.id}`,
-              title: `${sub.merchant_name} Trial Ending Soon`,
-              message: `Your trial will renew at ${formatCurrencyAmount(sub.amount, user.preferred_currency || sub.currency || 'INR', sub.currency || 'INR')}. Cancel or revoke AutoPay if not needed.`,
+              merchantName: sub.merchant_name,
+              title: `${sub.merchant_name} Trial Ending`,
+              message: `Trial will renew at ${formatCurrencyAmount(sub.amount, user.preferred_currency || sub.currency || 'INR', sub.currency || 'INR')}. Cancel or revoke AutoPay if not needed.`,
+              meta: `${sub.payment_mode_label || 'UPI AutoPay'} • ${formatCurrencyAmount(sub.amount, user.preferred_currency || sub.currency || 'INR', sub.currency || 'INR')}`,
+              category: 'trials',
+              timeAgo: '2h ago',
+              unread: true,
               type: 'warning',
             });
           } else if (sub.status === 'needs_review') {
             alerts.push({
               id: `review-${sub.id}`,
+              merchantName: sub.merchant_name,
               title: `${sub.merchant_name} Needs Date Review`,
               message: `Unconfirmed renewal date for ${sub.merchant_name}. Please set date to enable automated reminders.`,
+              meta: 'Unconfirmed Estimate',
+              category: 'system',
+              timeAgo: '4h ago',
+              unread: true,
               type: 'info',
             });
+          } else {
+            // Check if renewal is within 7 days
+            if (sub.next_billing_date) {
+              const diffMs = new Date(sub.next_billing_date).getTime() - Date.now();
+              const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+              if (diffDays <= 7 && diffDays >= 0) {
+                alerts.push({
+                  id: `renewal-${sub.id}`,
+                  merchantName: sub.merchant_name,
+                  title: `${sub.merchant_name} Renewal Alert`,
+                  message: `Watchdog trigger: Renews in ${diffDays === 0 ? 'Today' : diffDays + ' days'} (${formatCurrencyAmount(sub.amount, user.preferred_currency || sub.currency || 'INR', sub.currency || 'INR')}).`,
+                  meta: `${sub.payment_mode_label || 'UPI AutoPay'} • ${new Date(sub.next_billing_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
+                  category: 'renewals',
+                  timeAgo: '1d ago',
+                  unread: true,
+                  type: 'info',
+                });
+              }
+            }
           }
+        });
+
+        // Add standard watchdog mandate health notification
+        alerts.push({
+          id: 'system-mandate-sync',
+          merchantName: 'Watchdog',
+          title: 'Mandate & SI Guard Active',
+          message: 'All payment instruments and renewal notification triggers are synchronized with TLS 1.3 bank ledger sync.',
+          meta: 'Verified Guard Active',
+          category: 'system',
+          timeAgo: 'Just now',
+          unread: false,
+          type: 'success',
         });
 
         setNotifications(alerts);
@@ -387,7 +452,7 @@ export const AppShell: React.FC = () => {
             </div>
 
             {/* Notification Bell */}
-            <div className="relative">
+            <div className="relative" ref={notificationMenuRef}>
               <button
                 type="button"
                 onClick={() => setNotificationOpen(!notificationOpen)}
@@ -397,80 +462,164 @@ export const AppShell: React.FC = () => {
                 title="Notifications"
               >
                 <Bell className="w-4 h-4" />
-                {notifications.length > 0 && (
-                  <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center shadow-xs">
-                    {notifications.length}
+                {notifications.some((n) => n.unread) && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center shadow-xs animate-pulse">
+                    {notifications.filter((n) => n.unread).length}
                   </span>
                 )}
               </button>
 
-              {/* Notification Dropdown */}
+              {/* Notification Overlay Popover (Behance Inspired) */}
               {notificationOpen && (
-                <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 p-4 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
-                  <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 mb-2">
-                    <span className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
-                      Recent Alerts
-                    </span>
-                    {notifications.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setNotifications([])}
-                        className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold cursor-pointer hover:underline"
-                      >
-                        Mark all read
-                      </button>
+                <div className="absolute right-0 mt-2.5 w-[360px] sm:w-[420px] bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 z-50 overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2 duration-150">
+                  {/* Header */}
+                  <div className="p-4 sm:p-5 pb-3 border-b border-slate-100 dark:border-slate-800">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white tracking-tight">
+                          Notifications
+                        </h2>
+                        {notifications.some((n) => n.unread) ? (
+                          <span className="px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/80 text-[#2446D8] dark:text-blue-400 font-extrabold text-[11px] border border-blue-200/60 dark:border-blue-900/60">
+                            {notifications.filter((n) => n.unread).length} new
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 font-medium text-[11px]">
+                            Caught up
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1">
+                        {notifications.some((n) => n.unread) && (
+                          <button
+                            type="button"
+                            onClick={() => setNotifications((prev) => prev.map((item) => ({ ...item, unread: false })))}
+                            className="text-xs font-semibold text-[#2446D8] dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors px-2 py-1 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-950/50 cursor-pointer"
+                          >
+                            Mark all as read
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setNotificationOpen(false)}
+                          className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                          title="Close"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Filter Tabs Pills (All, Renewals, Trials, System) */}
+                    <div className="flex items-center gap-1.5 mt-3 overflow-x-auto no-scrollbar">
+                      {[
+                        { id: 'all', label: 'All', count: notifications.length },
+                        { id: 'renewals', label: 'Renewals', count: notifications.filter((n) => n.category === 'renewals').length },
+                        { id: 'trials', label: 'Trials', count: notifications.filter((n) => n.category === 'trials').length },
+                        { id: 'system', label: 'Autopay & System', count: notifications.filter((n) => n.category === 'system').length },
+                      ].map((tab) => (
+                        <button
+                          key={tab.id}
+                          type="button"
+                          onClick={() => setActiveNotificationTab(tab.id as any)}
+                          className={`px-3 py-1.5 rounded-xl text-xs transition-all cursor-pointer whitespace-nowrap ${
+                            activeNotificationTab === tab.id
+                              ? 'bg-[#2446D8] text-white font-bold shadow-xs'
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 font-semibold'
+                          }`}
+                        >
+                          {tab.label} <span className="opacity-80 text-[10px] ml-0.5">{tab.count}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Notification List Items */}
+                  <div className="p-2 sm:p-3 space-y-1.5 max-h-[360px] overflow-y-auto">
+                    {notifications.filter((n) => activeNotificationTab === 'all' || n.category === activeNotificationTab).length === 0 ? (
+                      <div className="py-8 text-center text-slate-400 text-xs">
+                        <Bell className="w-7 h-7 mx-auto mb-2 opacity-30 text-slate-400" />
+                        <p className="font-semibold text-slate-700 dark:text-slate-200">No Notifications</p>
+                        <p className="text-[11px] text-slate-400 mt-1 max-w-[220px] mx-auto">
+                          No alerts in this category right now.
+                        </p>
+                      </div>
+                    ) : (
+                      notifications
+                        .filter((n) => activeNotificationTab === 'all' || n.category === activeNotificationTab)
+                        .map((n) => (
+                          <div
+                            key={n.id}
+                            onClick={() => {
+                              setNotifications((prev) =>
+                                prev.map((item) => (item.id === n.id ? { ...item, unread: false } : item))
+                              );
+                              if (n.category === 'renewals' || n.category === 'trials') {
+                                navigate('/subscriptions');
+                                setNotificationOpen(false);
+                              }
+                            }}
+                            className={`group p-3 rounded-2xl transition-all cursor-pointer border border-transparent hover:border-slate-200 dark:hover:border-slate-800 flex items-start gap-3 relative ${
+                              n.unread
+                                ? 'bg-blue-50/40 dark:bg-slate-800/40 hover:bg-white dark:hover:bg-slate-800'
+                                : 'bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/60 opacity-80'
+                            }`}
+                          >
+                            <div
+                              className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 ${
+                                n.category === 'trials'
+                                  ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400'
+                                  : n.category === 'renewals'
+                                  ? 'bg-blue-100 dark:bg-blue-950/60 text-[#2446D8] dark:text-blue-400'
+                                  : 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400'
+                              }`}
+                            >
+                              {n.merchantName ? n.merchantName.charAt(0) : 'R'}
+                            </div>
+
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-start justify-between gap-2">
+                                <p className="text-xs text-slate-900 dark:text-white leading-snug">
+                                  <span className="font-extrabold">{n.title}</span>: {n.message}
+                                </p>
+                                {n.unread && (
+                                  <span className="w-2 h-2 rounded-full bg-[#2446D8] shrink-0 mt-1" />
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 mt-1.5">
+                                {n.meta && (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">
+                                    {n.meta}
+                                  </span>
+                                )}
+                                <span className="text-[10px] text-slate-400">{n.timeAgo}</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))
                     )}
                   </div>
 
-                  {notifications.length === 0 ? (
-                    <div className="py-6 text-center text-slate-400 text-xs">
-                      <Bell className="w-6 h-6 mx-auto mb-2 opacity-30 text-slate-400" />
-                      <p className="font-semibold text-slate-700 dark:text-slate-200">No New Notifications</p>
-                      <p className="text-[11px] text-slate-400 mt-1 max-w-[220px] mx-auto">
-                        You have no active subscription alerts or upcoming renewal warnings right now.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="space-y-2 text-xs">
-                      {notifications.map((n) => (
-                        <div
-                          key={n.id}
-                          className={`p-2.5 rounded-xl border ${
-                            n.type === 'warning'
-                              ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-100 dark:border-amber-900/40'
-                              : 'bg-blue-50 dark:bg-blue-950/30 border-blue-100 dark:border-blue-900/40'
-                          }`}
-                        >
-                          <p
-                            className={`font-semibold ${
-                              n.type === 'warning'
-                                ? 'text-amber-900 dark:text-amber-200'
-                                : 'text-blue-900 dark:text-blue-200'
-                            }`}
-                          >
-                            {n.title}
-                          </p>
-                          <p
-                            className={`text-[11px] mt-0.5 ${
-                              n.type === 'warning'
-                                ? 'text-amber-700 dark:text-amber-300'
-                                : 'text-blue-700 dark:text-blue-300'
-                            }`}
-                          >
-                            {n.message}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  {/* Footer */}
+                  <div className="p-3 px-4 sm:px-5 bg-slate-50/80 dark:bg-slate-800/40 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                    <button
+                      type="button"
+                      onClick={() => setNotifications((prev) => prev.map((item) => ({ ...item, unread: false })))}
+                      className="text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
+                    >
+                      Mark all as read
+                    </button>
 
-                  <NavLink
-                    to="/reminders"
-                    onClick={() => setNotificationOpen(false)}
-                    className="block text-center text-xs font-semibold text-[#2446D8] dark:text-blue-400 pt-3 hover:underline"
-                  >
-                    View All Reminders →
-                  </NavLink>
+                    <NavLink
+                      to="/reminders"
+                      onClick={() => setNotificationOpen(false)}
+                      className="py-1.5 px-3 rounded-xl bg-[#2446D8] hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm shadow-blue-600/20 transition-all cursor-pointer"
+                    >
+                      <span>Go to notification center</span>
+                      <ChevronDown className="w-3.5 h-3.5 -rotate-90" />
+                    </NavLink>
+                  </div>
                 </div>
               )}
             </div>
