@@ -96,7 +96,9 @@ export const AddSubscriptionPage: React.FC = () => {
   const [formCategory, setFormCategory] = useState<SubscriptionCategory>('Software & Tools');
   const [formAmount, setFormAmount] = useState('');
   const [formCurrency, setFormCurrency] = useState<Currency>(userPreferredCurrency);
-  const [formCadence, setFormCadence] = useState<'monthly' | 'yearly' | 'unknown'>('unknown');
+  const [formCadence, setFormCadence] = useState<'monthly' | 'annually' | 'quarterly' | 'custom'>('monthly');
+  const [formCustomInterval, setFormCustomInterval] = useState(1);
+  const [formCustomUnit, setFormCustomUnit] = useState<BillingIntervalUnit>('weeks');
   const [formCadencePrompt, setFormCadencePrompt] = useState(false);
   const [formRenewalDate, setFormRenewalDate] = useState('');
   const [formPaymentSourceId, setFormPaymentSourceId] = useState('');
@@ -136,6 +138,8 @@ export const AddSubscriptionPage: React.FC = () => {
   };
 
   const [manualCadence, setManualCadence] = useState<'monthly' | 'annually' | 'quarterly' | 'custom'>('monthly');
+  const [manualCustomInterval, setManualCustomInterval] = useState(1);
+  const [manualCustomUnit, setManualCustomUnit] = useState<BillingIntervalUnit>('weeks');
   const [manualNextDate, setManualNextDate] = useState('');
   const [manualPaymentInstrument, setManualPaymentInstrument] = useState<string>('upi_mandate');
   const [manualMandateRef, setManualMandateRef] = useState('');
@@ -254,7 +258,16 @@ export const AddSubscriptionPage: React.FC = () => {
       );
       const candCurrency = (activeCandidate.currency as Currency) || 'USD';
       setFormCurrency(candCurrency);
-      setFormCadence(activeCandidate.cadence || 'unknown');
+      const candCad = activeCandidate.cadence;
+      if (candCad === 'yearly' || candCad === 'annually') {
+        setFormCadence('annually');
+      } else if (candCad === 'quarterly') {
+        setFormCadence('quarterly');
+      } else if (candCad === 'custom') {
+        setFormCadence('custom');
+      } else {
+        setFormCadence('monthly');
+      }
       setFormRenewalDate(activeCandidate.renewalDate || '');
       setFormUnconfirmedEstimate(activeCandidate.confidence < 80 || activeCandidate.amount === null || !activeCandidate.merchantName);
       setFormPaymentSourceId(activeCandidate.paymentSource || '');
@@ -340,7 +353,16 @@ export const AddSubscriptionPage: React.FC = () => {
           );
           setFormMerchantName(primaryCand.merchantName);
           setFormCategory(primaryCand.category);
-          setFormCadence(primaryCand.cadence || 'unknown');
+          const candCad = primaryCand.cadence;
+          if (candCad === 'yearly' || candCad === 'annually') {
+            setFormCadence('annually');
+          } else if (candCad === 'quarterly') {
+            setFormCadence('quarterly');
+          } else if (candCad === 'custom') {
+            setFormCadence('custom');
+          } else {
+            setFormCadence('monthly');
+          }
           setFormRenewalDate(primaryCand.renewalDate || '');
           setFormPaymentSourceId(primaryCand.paymentSource || '');
           setFormUnconfirmedEstimate(primaryCand.confidence < 80 || primaryCand.amount === null || !primaryCand.merchantName);
@@ -371,7 +393,7 @@ export const AddSubscriptionPage: React.FC = () => {
         setFormAmount('');
         setFormMerchantName(cleanName);
         setFormCategory('Software & Tools');
-        setFormCadence('unknown');
+        setFormCadence('monthly');
         setFormRenewalDate('');
         setFormPaymentSourceId('');
         setFormUnconfirmedEstimate(true);
@@ -401,7 +423,7 @@ export const AddSubscriptionPage: React.FC = () => {
       setExtractionDone(true);
       setFormMerchantName(cleanName);
       setFormAmount('');
-      setFormCadence('unknown');
+      setFormCadence('monthly');
       setFormRenewalDate('');
       setFormPaymentSourceId('');
       setFormUnconfirmedEstimate(true);
@@ -456,8 +478,35 @@ export const AddSubscriptionPage: React.FC = () => {
     if (!formMerchantName.trim()) return;
     setIsSaving(true);
 
-    const intervalUnit: BillingIntervalUnit = formCadence === 'yearly' ? 'years' : 'months';
+    const intervalUnit: BillingIntervalUnit = formCadence === 'annually'
+      ? 'years'
+      : formCadence === 'custom'
+      ? formCustomUnit
+      : 'months';
+    const billingInterval = formCadence === 'quarterly'
+      ? 3
+      : formCadence === 'custom'
+      ? formCustomInterval
+      : 1;
     const numAmount = parseFloat(formAmount) || 0;
+
+    let validNextDate = formRenewalDate && formRenewalDate.trim() ? formRenewalDate.trim() : '';
+    if (!validNextDate) {
+      const d = new Date();
+      if (formCadence === 'annually') {
+        d.setFullYear(d.getFullYear() + 1);
+      } else if (formCadence === 'quarterly') {
+        d.setMonth(d.getMonth() + 3);
+      } else if (formCadence === 'custom') {
+        if (formCustomUnit === 'days') d.setDate(d.getDate() + formCustomInterval);
+        else if (formCustomUnit === 'weeks') d.setDate(d.getDate() + formCustomInterval * 7);
+        else if (formCustomUnit === 'months') d.setMonth(d.getMonth() + formCustomInterval);
+        else if (formCustomUnit === 'years') d.setFullYear(d.getFullYear() + formCustomInterval);
+      } else {
+        d.setDate(d.getDate() + 30);
+      }
+      validNextDate = d.toISOString().split('T')[0];
+    }
 
     const rawMode = formPaymentSourceId.trim();
     let modeLabel = rawMode;
@@ -498,9 +547,9 @@ export const AddSubscriptionPage: React.FC = () => {
       category: formCategory,
       amount: numAmount,
       currency: formCurrency,
-      billing_interval: 1,
+      billing_interval: billingInterval,
       billing_interval_unit: intervalUnit,
-      next_billing_date: formRenewalDate,
+      next_billing_date: validNextDate,
       payment_mode_label: modeLabel,
       payment_mode_badge: modeBadge,
       status: formUnconfirmedEstimate ? 'needs_review' : 'active',
@@ -518,7 +567,7 @@ export const AddSubscriptionPage: React.FC = () => {
         amount: numAmount,
         currency: formCurrency,
         transaction_date: activeCandidate?.date || formRenewalDate || new Date().toISOString().split('T')[0],
-        suggested_cadence: formCadence,
+        suggested_cadence: formCadence === 'annually' ? 'yearly' : formCadence,
         suggested_category: formCategory,
         confidence_score: activeCandidate?.confidence ? activeCandidate.confidence / 100 : 0.85,
         possible_duplicate: Boolean(activeCandidate?.isDuplicate),
@@ -565,7 +614,16 @@ export const AddSubscriptionPage: React.FC = () => {
 
     setIsSaving(true);
     try {
-      const intervalUnit: BillingIntervalUnit = manualCadence === 'annually' ? 'years' : 'months';
+      const intervalUnit: BillingIntervalUnit = manualCadence === 'annually'
+        ? 'years'
+        : manualCadence === 'custom'
+        ? manualCustomUnit
+        : 'months';
+      const billingInterval = manualCadence === 'quarterly'
+        ? 3
+        : manualCadence === 'custom'
+        ? manualCustomInterval
+        : 1;
       const numAmount = parseFloat(manualAmount) || 0;
 
       // Ensure valid next billing date: default based on cadence if left empty
@@ -576,6 +634,11 @@ export const AddSubscriptionPage: React.FC = () => {
           d.setFullYear(d.getFullYear() + 1);
         } else if (manualCadence === 'quarterly') {
           d.setMonth(d.getMonth() + 3);
+        } else if (manualCadence === 'custom') {
+          if (manualCustomUnit === 'days') d.setDate(d.getDate() + manualCustomInterval);
+          else if (manualCustomUnit === 'weeks') d.setDate(d.getDate() + manualCustomInterval * 7);
+          else if (manualCustomUnit === 'months') d.setMonth(d.getMonth() + manualCustomInterval);
+          else if (manualCustomUnit === 'years') d.setFullYear(d.getFullYear() + manualCustomInterval);
         } else {
           d.setDate(d.getDate() + 30);
         }
@@ -604,7 +667,7 @@ export const AddSubscriptionPage: React.FC = () => {
         category: manualCategory,
         amount: numAmount,
         currency: manualCurrency,
-        billing_interval: 1,
+        billing_interval: billingInterval,
         billing_interval_unit: intervalUnit,
         next_billing_date: validNextDate,
         trial_end_date: isTrial && trialEndDate.trim() ? trialEndDate.trim() : undefined,
@@ -1106,65 +1169,77 @@ export const AddSubscriptionPage: React.FC = () => {
 
               {/* Billing Cadence / Frequency */}
               <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="font-bold text-slate-800 dark:text-slate-200">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="font-bold text-slate-800 dark:text-slate-200 text-xs">
                     Billing Cadence / Frequency
                   </label>
                   {activeCandidate ? (
-                    activeCandidate.cadence === 'yearly' || activeCandidate.cadence === 'monthly' ? (
+                    activeCandidate.cadence === 'yearly' || activeCandidate.cadence === 'annually' || activeCandidate.cadence === 'monthly' || activeCandidate.cadence === 'quarterly' || activeCandidate.cadence === 'custom' ? (
                       <span className="px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-[10px] font-semibold border border-emerald-200 dark:border-emerald-800">
-                        Detected in document
+                        Detected in document ({activeCandidate.cadence === 'yearly' ? 'annually' : activeCandidate.cadence})
                       </span>
                     ) : (
                       <span className="px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 text-[10px] font-semibold border border-amber-200 dark:border-amber-800">
-                        Not specified in document
+                        Defaulted to Monthly
                       </span>
                     )
                   ) : null}
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {[
-                    { id: 'monthly', title: 'Monthly', desc: '(Standard)' },
-                    { id: 'yearly', title: 'Yearly', desc: 'Billed annually' },
-                    { id: 'unknown', title: 'Unknown', desc: 'Requires history' },
-                  ].map((cad) => {
-                    const isSelected = formCadence === cad.id;
-                    return (
-                      <button
-                        key={cad.id}
-                        type="button"
-                        onClick={() => setFormCadence(cad.id as any)}
-                        className={`p-3 rounded-xl border text-left transition-all ${
-                          isSelected
-                            ? 'bg-blue-50 dark:bg-slate-800 border-2 border-[#2446D8] dark:border-blue-400 shadow-xs'
-                            : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2.5">
-                          <div
-                            className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${
-                              isSelected
-                                ? 'border-[#2446D8] dark:border-blue-400 bg-white dark:bg-slate-900'
-                                : 'border-slate-400 dark:border-slate-500 bg-white dark:bg-slate-800'
-                            }`}
-                          >
-                            {isSelected && (
-                              <div className="w-2 h-2 rounded-full bg-[#2446D8] dark:bg-blue-400" />
-                            )}
-                          </div>
-                          <div className="min-w-0">
-                            <span className={`block font-bold text-xs truncate ${isSelected ? 'text-[#2446D8] dark:text-blue-300' : 'text-slate-900 dark:text-slate-100'}`}>
-                              {cad.title}
-                            </span>
-                            <span className="block text-[10px] text-slate-500 dark:text-slate-400 truncate">
-                              {cad.desc}
-                            </span>
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
+                    { id: 'monthly', title: 'Monthly', badge: '✓', sub: 'Every 30 days' },
+                    { id: 'annually', title: 'Annually', badge: '-18%', sub: 'Billed yearly' },
+                    { id: 'quarterly', title: 'Quarterly', badge: '', sub: 'Every 3 mos' },
+                    { id: 'custom', title: 'Custom', badge: '', sub: 'Weekly / days' },
+                  ].map((cad) => (
+                    <button
+                      key={cad.id}
+                      type="button"
+                      onClick={() => setFormCadence(cad.id as any)}
+                      className={`p-3 rounded-2xl border text-center transition-all cursor-pointer ${
+                        formCadence === cad.id
+                          ? 'bg-[#2446D8] border-[#2446D8] text-white shadow-xs'
+                          : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600'
+                      }`}
+                    >
+                      <div className="flex items-center justify-center gap-1 font-bold text-xs">
+                        <span>{cad.title}</span>
+                        {cad.badge && (
+                          <span className={`text-[10px] ${formCadence === cad.id ? 'text-white' : 'text-emerald-600 dark:text-emerald-400 font-bold'}`}>
+                            {cad.badge}
+                          </span>
+                        )}
+                      </div>
+                      <span className={`text-[10px] block mt-0.5 ${formCadence === cad.id ? 'text-blue-100' : 'text-slate-400 dark:text-slate-400'}`}>
+                        {cad.sub}
+                      </span>
+                    </button>
+                  ))}
                 </div>
+
+                {formCadence === 'custom' && (
+                  <div className="mt-2.5 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 flex items-center gap-3">
+                    <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">Repeat every:</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={365}
+                      value={formCustomInterval}
+                      onChange={(e) => setFormCustomInterval(Math.max(1, parseInt(e.target.value) || 1))}
+                      className="w-16 h-8 px-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs font-bold text-center text-slate-900 dark:text-white"
+                    />
+                    <select
+                      value={formCustomUnit}
+                      onChange={(e) => setFormCustomUnit(e.target.value as BillingIntervalUnit)}
+                      className="h-8 px-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-900 dark:text-white cursor-pointer"
+                    >
+                      <option value="days">Days</option>
+                      <option value="weeks">Weeks</option>
+                      <option value="months">Months</option>
+                      <option value="years">Years</option>
+                    </select>
+                  </div>
+                )}
 
                 <label className="flex items-center gap-2 mt-2 cursor-pointer">
                   <input
@@ -1630,6 +1705,30 @@ export const AddSubscriptionPage: React.FC = () => {
                     </button>
                   ))}
                 </div>
+
+                {manualCadence === 'custom' && (
+                  <div className="mt-2.5 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 flex items-center gap-3">
+                    <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">Repeat every:</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={365}
+                      value={manualCustomInterval}
+                      onChange={(e) => setManualCustomInterval(Math.max(1, parseInt(e.target.value) || 1))}
+                      className="w-16 h-8 px-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs font-bold text-center text-slate-900 dark:text-white"
+                    />
+                    <select
+                      value={manualCustomUnit}
+                      onChange={(e) => setManualCustomUnit(e.target.value as BillingIntervalUnit)}
+                      className="h-8 px-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-900 dark:text-white cursor-pointer"
+                    >
+                      <option value="days">Days</option>
+                      <option value="weeks">Weeks</option>
+                      <option value="months">Months</option>
+                      <option value="years">Years</option>
+                    </select>
+                  </div>
+                )}
               </div>
 
               {/* Next Billing Date & Quick Presets */}
@@ -1981,7 +2080,7 @@ export const AddSubscriptionPage: React.FC = () => {
                     {CURRENCY_SYMBOLS[manualCurrency] || '$'}{manualAmount ? parseFloat(manualAmount || '0').toFixed(2) : '0.00'}
                   </span>
                   <span className="text-[10px] text-slate-400 uppercase">
-                    / {manualCadence === 'annually' ? 'year' : 'month'}
+                    / {manualCadence === 'annually' ? 'year' : manualCadence === 'quarterly' ? 'quarter' : manualCadence === 'custom' ? `${manualCustomInterval} ${manualCustomUnit}` : 'month'}
                   </span>
                 </div>
               </div>
