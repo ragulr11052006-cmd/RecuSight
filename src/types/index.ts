@@ -25,7 +25,7 @@ export type SubscriptionCategory =
 
 export type BillingIntervalUnit = 'days' | 'weeks' | 'months' | 'years';
 
-export type SubscriptionStatus = 'active' | 'trial' | 'paused' | 'cancelled' | 'needs_review';
+export type SubscriptionStatus = 'active' | 'trial' | 'paused' | 'cancelled' | 'needs_review' | 'expired';
 
 export type ConfidenceStatus = 'verified' | 'unconfirmed_estimate' | 'candidate';
 
