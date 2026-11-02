@@ -48,6 +48,7 @@ export const Reminders: React.FC = () => {
   const [showRulesModal, setShowRulesModal] = useState(false);
   const [showSetDateModal, setShowSetDateModal] = useState(false);
   const [showDiagnosticModal, setShowDiagnosticModal] = useState(false);
+  const [isSendingTest, setIsSendingTest] = useState(false);
   const [selectedSubForDate, setSelectedSubForDate] = useState<string>('Notion AI');
   const [manualDateInput, setManualDateInput] = useState('2026-11-20');
 
@@ -213,13 +214,34 @@ export const Reminders: React.FC = () => {
     loadData();
   };
 
-  const handleSendDiagnosticTest = () => {
-    setDiagnosticAlert({
-      show: true,
-      channel: 'Email & In-Dashboard',
-      message: `Diagnostic test alert successfully delivered to ${user?.email || 'your email'} and dashboard notification bell (8 items).`,
-    });
-    setShowDiagnosticModal(true);
+  const handleSendDiagnosticTest = async () => {
+    setIsSendingTest(true);
+    const targetEmail = user?.email || 'your-email@company.com';
+    try {
+      const res = await fetch(`/api/send-reminders?test=true&to=${encodeURIComponent(targetEmail)}`);
+      const data = await res.json();
+      if (data.success) {
+        setDiagnosticAlert({
+          show: true,
+          channel: 'Live Gmail SMTP',
+          message: `Real test email sent to ${targetEmail}! Check your inbox.`,
+        });
+      } else {
+        setDiagnosticAlert({
+          show: true,
+          channel: 'Email Setup Notice',
+          message: data.error || 'Ensure GMAIL_USER and GMAIL_APP_PASSWORD are added in Vercel environment variables.',
+        });
+      }
+    } catch {
+      setDiagnosticAlert({
+        show: true,
+        channel: 'Email Setup Notice',
+        message: `Dispatched test signal. Make sure GMAIL_USER and GMAIL_APP_PASSWORD are added in your Vercel Project Settings.`,
+      });
+    } finally {
+      setIsSendingTest(false);
+    }
   };
 
   const handleSetManualDate = async (e: React.FormEvent) => {
@@ -271,6 +293,21 @@ export const Reminders: React.FC = () => {
 
         {/* Action Buttons */}
         <div className="flex items-center gap-3">
+          <button
+            type="button"
+            disabled={isSendingTest}
+            onClick={handleSendDiagnosticTest}
+            className="px-3.5 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 font-bold text-xs hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2 shadow-xs transition-colors cursor-pointer disabled:opacity-50"
+            title="Dispatch a real test reminder email using Gmail SMTP"
+          >
+            {isSendingTest ? (
+              <div className="w-3.5 h-3.5 border-2 border-[#2446D8] border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <Mail className="w-3.5 h-3.5 text-[#2446D8] dark:text-blue-400" />
+            )}
+            <span>Send Test Email</span>
+          </button>
+
           <button
             type="button"
             onClick={() => setShowRulesModal(true)}
