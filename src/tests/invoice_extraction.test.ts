@@ -484,5 +484,45 @@ describe('Invoice Upload & Extraction Accuracy Test Suite', () => {
       expect(dates.invoiceDate.value).toBe('2026-10-28');
       expect(dates.billingFrequency.value).toBe('monthly');
     });
+
+    it('correctly handles Indian Telecom GST invoice (Jio STNR): rejects Income Tax Department and prioritizes Grand Total over Total Taxable', () => {
+      // Simulating real-world invoice matching the user's screenshot
+      const jioInvoiceText = `
+        Reliance Jio Infocomm Limited
+        Registered Office: Office - 101, Saffron, Nr Centre Point, Panchwati 5 Rasta, Ambawadi, Ahmedabad
+        PAN: AABCR0994N (Income Tax Department.)
+        GSTIN: 27AABCR0994N1ZV
+        Tax Invoice Number: STNR27019909374
+        Invoice Date: 03-Oct-2026
+        Customer: Ragul R
+        Plan: JioFiber Broadband 30 Days Monthly
+        Total Taxable (Rs.) 599.00
+        CGST @ 9% (Rs.) 53.91
+        SGST @ 9% (Rs.) 53.91
+        Total Invoice Value (Rs.) 706.82
+        Payment Method: UPI AutoPay (Google Pay / PhonePe)
+      `;
+
+      // 1. Merchant Identification
+      const merchant = identifyMerchant(jioInvoiceText, '9001257632_STNR27019909374.pdf');
+      expect(merchant.merchantName.value).toBe('Jio Fiber / Mobile');
+      expect(merchant.merchantName.value).not.toContain('Income Tax Department');
+      expect(merchant.category).toBe('Utilities & Cloud');
+
+      // 2. Amount & Tax Extraction
+      const amountResult = extractTotalAmountAndCurrency(jioInvoiceText, '9001257632_STNR27019909374.pdf', 'INR');
+      expect(amountResult.totalAmount.value).toBe(706.82); // CRITICAL: NEVER 599.00!
+      expect(amountResult.subtotal.value).toBe(599);
+      expect(amountResult.taxAmount.value).toBe(107.82);
+      expect(amountResult.currency.value).toBe('INR');
+
+      // 3. Invoice Number
+      const invNumber = extractInvoiceNumber(jioInvoiceText);
+      expect(invNumber.value).toBe('STNR27019909374');
+
+      // 4. Dates
+      const dates = extractDatesAndPeriod(jioInvoiceText);
+      expect(dates.invoiceDate.value).toBe('2026-10-03');
+    });
   });
 });
