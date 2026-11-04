@@ -451,6 +451,196 @@ export const KNOWN_BRANDS: KnownBrand[] = [
       /\bzoom\.us\b/i,
     ],
   },
+  {
+    id: 'cursor',
+    canonicalName: 'Cursor AI Pro',
+    defaultServiceName: 'Cursor Pro',
+    category: 'Ai Assist',
+    patterns: [
+      /\bcursor\s*(?:pro|ai|editor)\b/i,
+      /\banysphere[,\s]+inc\.?\b/i,
+      /\bcursor\.com\b/i,
+      /\bcursor\.sh\b/i,
+    ],
+  },
+  {
+    id: 'perplexity',
+    canonicalName: 'Perplexity AI',
+    defaultServiceName: 'Perplexity Pro',
+    category: 'Ai Assist',
+    patterns: [
+      /\bperplexity\s*(?:ai|pro|labs)\b/i,
+      /\bperplexity\.ai\b/i,
+    ],
+  },
+  {
+    id: 'midjourney',
+    canonicalName: 'Midjourney',
+    defaultServiceName: 'Midjourney Subscription',
+    category: 'Ai Assist',
+    patterns: [
+      /\bmidjourney[,\s]+inc\.?\b/i,
+      /\bmidjourney\.com\b/i,
+    ],
+  },
+  {
+    id: 'elevenlabs',
+    canonicalName: 'ElevenLabs',
+    defaultServiceName: 'ElevenLabs Plan',
+    category: 'Ai Assist',
+    patterns: [
+      /\belevenlabs\b/i,
+      /\beleven\s*labs\b/i,
+    ],
+  },
+  {
+    id: 'apple',
+    canonicalName: 'Apple Services',
+    defaultServiceName: 'Apple iCloud+ / Services',
+    category: 'Utilities & Cloud',
+    patterns: [
+      /\bapple\s*(?:distribution\s*international|services|operations|india|ireland)\b/i,
+      /\bapple\.com\/bill\b/i,
+      /\bicloud\+?\b/i,
+      /\bapple\s*one\b/i,
+    ],
+  },
+  {
+    id: 'youtube',
+    canonicalName: 'YouTube Premium',
+    defaultServiceName: 'YouTube Premium Membership',
+    category: 'Streaming & Ent',
+    patterns: [
+      /\byoutube\s*premium\b/i,
+      /\bgoogle\s*\*youtube\b/i,
+      /\byoutube\.com\b/i,
+    ],
+  },
+  {
+    id: 'google_workspace',
+    canonicalName: 'Google Workspace',
+    defaultServiceName: 'Google Workspace Business',
+    category: 'Productivity',
+    patterns: [
+      /\bgoogle\s*(?:workspace|one|apps|asia\s*pacific|cloud\s*india)\b/i,
+      /\bworkspace\.google\.com\b/i,
+    ],
+  },
+  {
+    id: 'amazon_prime',
+    canonicalName: 'Amazon Prime',
+    defaultServiceName: 'Amazon Prime Membership',
+    category: 'Streaming & Ent',
+    patterns: [
+      /\bamazon\s*prime\b/i,
+      /\bprime\s*video\b/i,
+      /\bamzn\s*prime\b/i,
+    ],
+  },
+  {
+    id: 'vercel',
+    canonicalName: 'Vercel',
+    defaultServiceName: 'Vercel Pro',
+    category: 'Utilities & Cloud',
+    patterns: [
+      /\bvercel[,\s]+inc\.?\b/i,
+      /\bvercel\.com\b/i,
+    ],
+  },
+  {
+    id: 'supabase',
+    canonicalName: 'Supabase',
+    defaultServiceName: 'Supabase Pro',
+    category: 'Utilities & Cloud',
+    patterns: [
+      /\bsupabase[,\s]+inc\.?\b/i,
+      /\bsupabase\.com\b/i,
+    ],
+  },
+  {
+    id: 'hostinger',
+    canonicalName: 'Hostinger',
+    defaultServiceName: 'Web Hosting / Cloud Plan',
+    category: 'Utilities & Cloud',
+    patterns: [
+      /\bhostinger\s*(?:international|india|uab)\b/i,
+      /\bhostinger\.com\b/i,
+      /\bhostinger\.in\b/i,
+    ],
+  },
+  {
+    id: 'digitalocean',
+    canonicalName: 'DigitalOcean',
+    defaultServiceName: 'Cloud Droplet / Hosting',
+    category: 'Utilities & Cloud',
+    patterns: [
+      /\bdigitalocean[,\s]+llc\b/i,
+      /\bdigitalocean\.com\b/i,
+    ],
+  },
+  {
+    id: 'atlassian',
+    canonicalName: 'Atlassian',
+    defaultServiceName: 'Jira / Confluence Standard',
+    category: 'Productivity',
+    patterns: [
+      /\batlassian\s*(?:pty\s*ltd|inc\.?)\b/i,
+      /\batlassian\.com\b/i,
+      /\bjira\s*software\b/i,
+    ],
+  },
+  {
+    id: 'linear',
+    canonicalName: 'Linear',
+    defaultServiceName: 'Linear Standard',
+    category: 'Productivity',
+    patterns: [
+      /\blinear\s*orbit[,\s]+inc\.?\b/i,
+      /\blinear\.app\b/i,
+    ],
+  },
+  {
+    id: 'jio',
+    canonicalName: 'Jio Fiber / Mobile',
+    defaultServiceName: 'Jio Fiber Broadband',
+    category: 'Utilities & Cloud',
+    patterns: [
+      /\breliance\s*jio\s*infocomm\b/i,
+      /\bjio\s*fiber\b/i,
+      /\bjio\s*platforms\b/i,
+    ],
+  },
+  {
+    id: 'airtel',
+    canonicalName: 'Airtel Xstream',
+    defaultServiceName: 'Airtel Postpaid / Broadband',
+    category: 'Utilities & Cloud',
+    patterns: [
+      /\bbharti\s*airtel\b/i,
+      /\bairtel\s*xstream\b/i,
+      /\bairtel\s*broadband\b/i,
+    ],
+  },
+  {
+    id: 'swiggy',
+    canonicalName: 'Swiggy One',
+    defaultServiceName: 'Swiggy One Membership',
+    category: 'Entertainment',
+    patterns: [
+      /\bswiggy\s*one\b/i,
+      /\bbundl\s*technologies\b/i,
+    ],
+  },
+  {
+    id: 'zomato',
+    canonicalName: 'Zomato Gold',
+    defaultServiceName: 'Zomato Gold Membership',
+    category: 'Entertainment',
+    patterns: [
+      /\bzomato\s*gold\b/i,
+      /\bzomato\s*limited\b/i,
+    ],
+  },
 ];
 
 // Compatibility alias for existing references
@@ -474,12 +664,30 @@ export function getCanonicalMerchantName(raw: string): string {
   if (/github/i.test(lower)) return 'GitHub';
   if (/amazon\s*web\s*services|\baws\b/i.test(lower)) return 'Amazon Web Services (AWS)';
   if (/google\s*cloud|\bgcp\b/i.test(lower)) return 'Google Cloud Platform';
+  if (/google\s*(?:workspace|one|apps)/i.test(lower)) return 'Google Workspace';
+  if (/youtube/i.test(lower)) return 'YouTube Premium';
   if (/canva/i.test(lower)) return 'Canva';
   if (/slack/i.test(lower)) return 'Slack';
   if (/notion/i.test(lower)) return 'Notion';
   if (/zoom/i.test(lower)) return 'Zoom';
   if (/openai|chatgpt/i.test(lower)) return 'OpenAI';
   if (/anthropic|claude/i.test(lower)) return 'Anthropic';
+  if (/cursor|anysphere/i.test(lower)) return 'Cursor AI Pro';
+  if (/perplexity/i.test(lower)) return 'Perplexity AI';
+  if (/midjourney/i.test(lower)) return 'Midjourney';
+  if (/elevenlabs|eleven\s*labs/i.test(lower)) return 'ElevenLabs';
+  if (/vercel/i.test(lower)) return 'Vercel';
+  if (/supabase/i.test(lower)) return 'Supabase';
+  if (/apple/i.test(lower)) return 'Apple Services';
+  if (/amazon\s*prime|prime\s*video/i.test(lower)) return 'Amazon Prime';
+  if (/hostinger/i.test(lower)) return 'Hostinger';
+  if (/digitalocean/i.test(lower)) return 'DigitalOcean';
+  if (/atlassian|jira/i.test(lower)) return 'Atlassian';
+  if (/linear/i.test(lower)) return 'Linear';
+  if (/jio/i.test(lower)) return 'Jio Fiber / Mobile';
+  if (/airtel/i.test(lower)) return 'Airtel Xstream';
+  if (/swiggy/i.test(lower)) return 'Swiggy One';
+  if (/zomato/i.test(lower)) return 'Zomato Gold';
   if (/microsoft/i.test(lower)) return 'Microsoft';
 
   return raw
@@ -1486,7 +1694,7 @@ export function extractPaymentMethod(text: string): ExtractedField<string> {
   }
 
   // 5. UPI / AutoPay Handles & Apps (with support for masked characters e.g. y+++@okhdfcbank or y•••@okhdfcbank)
-  const upiIdMatch = clean.match(/\b([a-zA-Z0-9.\-_+*•·xX]{2,30}@(okhdfcbank|okaxis|oksbi|okicici|paytm|ybl|ibl|apl|axl|upi|federal|idfcbank|kotak|barodampay))\b/i);
+  const upiIdMatch = clean.match(/\b([a-zA-Z0-9.\-_+*•·xX]{2,30}@(okhdfcbank|okaxis|oksbi|okicici|paytm|ybl|ibl|apl|axl|upi|federal|idfcbank|kotak|barodampay|axisbank|icici|sbi|hdfcbank|yesbank|postbank|jupiteraxis|slice|cred))\b/i);
   if (upiIdMatch) {
     const rawHandle = upiIdMatch[1];
     const cleanHandle = rawHandle.replace(/[+*·xX]{2,}/g, '•••');
@@ -1498,6 +1706,19 @@ export function extractPaymentMethod(text: string): ExtractedField<string> {
       status: 'high',
     };
   }
+
+  // 5b. UPI UTR / RRN / Transaction Reference Number
+  const upiRefMatch = clean.match(/\b(?:upi\s*(?:ref|reference|rrn|utr|txn|id)|rrn|utr)[:\s#]*([0-9]{8,16})\b/i);
+  if (upiRefMatch) {
+    return {
+      value: `UPI AutoPay (Ref •••• ${upiRefMatch[1].slice(-4)})`,
+      evidenceText: upiRefMatch[0],
+      page: 1,
+      confidence: 90,
+      status: 'high',
+    };
+  }
+
   if (/\b(?:google\s*pay|gpay)\b/i.test(clean)) {
     return {
       value: 'UPI AutoPay (Google Pay)',
@@ -1535,7 +1756,25 @@ export function extractPaymentMethod(text: string): ExtractedField<string> {
     };
   }
 
-  // 6. Digital Wallets & Bank Transfer
+  // 6. Digital Wallets & Net Banking
+  if (/\bamazon\s*pay\b/i.test(clean)) {
+    return {
+      value: 'Amazon Pay',
+      evidenceText: 'Amazon Pay',
+      page: 1,
+      confidence: 90,
+      status: 'high',
+    };
+  }
+  if (/\bcred(?:\s*pay)?\b/i.test(clean)) {
+    return {
+      value: 'CRED Pay',
+      evidenceText: 'CRED Pay',
+      page: 1,
+      confidence: 90,
+      status: 'high',
+    };
+  }
   if (/\bapple\s*pay\b/i.test(clean)) {
     return {
       value: 'Apple Pay',
@@ -1551,6 +1790,15 @@ export function extractPaymentMethod(text: string): ExtractedField<string> {
       evidenceText: 'PayPal',
       page: 1,
       confidence: 90,
+      status: 'high',
+    };
+  }
+  if (/\b(?:netbanking|internet\s*banking|online\s*banking)\b/i.test(clean)) {
+    return {
+      value: 'Net Banking',
+      evidenceText: 'Net Banking',
+      page: 1,
+      confidence: 85,
       status: 'high',
     };
   }
