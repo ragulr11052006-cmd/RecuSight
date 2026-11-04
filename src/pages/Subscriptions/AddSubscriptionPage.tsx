@@ -369,6 +369,7 @@ export const AddSubscriptionPage: React.FC = () => {
           setFormMerchantName(primaryCand.merchantName);
           setFormCategory(primaryCand.category);
           const candCad = primaryCand.cadence;
+          const isCadenceKnown = candCad && candCad !== 'unknown';
           if (candCad === 'yearly' || candCad === 'annually') {
             setFormCadence('annually');
           } else if (candCad === 'quarterly') {
@@ -380,7 +381,13 @@ export const AddSubscriptionPage: React.FC = () => {
           }
           setFormRenewalDate(primaryCand.renewalDate || '');
           setFormPaymentSourceId(primaryCand.paymentSource || '');
-          setFormUnconfirmedEstimate(primaryCand.confidence < 80 || primaryCand.amount === null || !primaryCand.merchantName);
+          setFormUnconfirmedEstimate(
+            primaryCand.confidence < 80 ||
+            primaryCand.amount === null ||
+            !primaryCand.merchantName ||
+            !isCadenceKnown ||
+            Boolean(primaryCand.isRenewalDateDerived)
+          );
         }
       } else {
         const cleanName = uploadedFile.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
@@ -1207,7 +1214,9 @@ export const AddSubscriptionPage: React.FC = () => {
                   </button>
                 </div>
                 <span className="text-[11px] italic text-slate-400 block mt-1">
-                  {activeCandidate?.rawString
+                  {activeCandidate?.serviceName && activeCandidate.serviceName !== activeCandidate.merchantName
+                    ? `Plan / Service: ${activeCandidate.serviceName}`
+                    : activeCandidate?.rawString
                     ? `Identified via transaction string '${activeCandidate.rawString}'`
                     : 'Enter the provider or service name'}
                 </span>
@@ -1390,7 +1399,9 @@ export const AddSubscriptionPage: React.FC = () => {
                     <Calendar className="w-3.5 h-3.5" />
                     <span>
                       {formRenewalDate
-                        ? `Estimated: ${new Date(formRenewalDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+                        ? (activeCandidate?.isRenewalDateDerived
+                            ? `Derived from period: ${new Date(formRenewalDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+                            : `Document: ${new Date(formRenewalDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`)
                         : 'Select renewal date'}
                     </span>
                   </span>
