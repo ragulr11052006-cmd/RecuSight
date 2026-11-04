@@ -35,6 +35,57 @@ export interface ExtractedField<T> {
   status: 'high' | 'medium' | 'low' | 'missing';
 }
 
+export interface UniversalInvoiceExtraction {
+  merchant_name: string | null;
+  service_name: string | null;
+  invoice_number: string | null;
+  subscription_amount: number | null;
+  subtotal: number | null;
+  tax_amount: number | null;
+  total_amount: number | null;
+  currency: string | null;
+  payment_method: 'Credit Card' | 'Debit Card' | 'UPI' | 'PayPal' | 'Bank Transfer' | 'Other' | 'Unknown';
+  billing_cycle: 'monthly' | 'yearly' | 'quarterly' | 'weekly' | 'custom' | 'unknown';
+  invoice_date: string | null;
+  payment_date: string | null;
+  due_date: string | null;
+  billing_period_start: string | null;
+  billing_period_end: string | null;
+  next_renewal_date: string | null;
+  is_renewal_date_derived: boolean;
+  fields_confidence: {
+    merchant_name: number;
+    service_name: number;
+    total_amount: number;
+    subscription_amount: number;
+    currency: number;
+    payment_method: number;
+    billing_cycle: number;
+    invoice_date: number;
+    next_renewal_date: number;
+  };
+  field_evidence: {
+    merchant_name?: string;
+    service_name?: string;
+    total_amount?: string;
+    payment_method?: string;
+    billing_cycle?: string;
+    next_renewal_date?: string;
+  };
+  extraction_status: 'verified' | 'needs_review' | 'manual_input_required';
+  raw_text?: string;
+}
+
+export function normalizePaymentMethod(raw: string | null | undefined): UniversalInvoiceExtraction['payment_method'] {
+  if (!raw) return 'Unknown';
+  if (/credit\s*card|visa|mastercard|amex|american\s*express|discover|card\s*ending|card\s*••••/i.test(raw)) return 'Credit Card';
+  if (/debit\s*card/i.test(raw)) return 'Debit Card';
+  if (/upi|gpay|phonepe|paytm|okhdfcbank|okaxis|oksbi|upi\s*autopay/i.test(raw)) return 'UPI';
+  if (/paypal/i.test(raw)) return 'PayPal';
+  if (/bank\s*transfer|wire|ach|direct\s*debit|neft|rtgs|sepa/i.test(raw)) return 'Bank Transfer';
+  return 'Other';
+}
+
 export interface InvoiceExtractionResult {
   documentName: string;
   fileSize: number;
@@ -56,6 +107,7 @@ export interface InvoiceExtractionResult {
   pagesText: string[];
   warnings: string[];
   detectedAmounts: number[];
+  universalExtraction?: UniversalInvoiceExtraction;
 }
 
 // =========================================================================
@@ -605,9 +657,14 @@ export const KNOWN_BRANDS: KnownBrand[] = [
     defaultServiceName: 'Jio Fiber Broadband',
     category: 'Utilities & Cloud',
     patterns: [
+      /\breliance\s*jio\b/i,
       /\breliance\s*jio\s*infocomm\b/i,
-      /\bjio\s*fiber\b/i,
-      /\bjio\s*platforms\b/i,
+      /\bjio\s*(?:fiber|airfiber|true\s*5g|telecom|platforms|prepaid|postpaid|broadband|infocomm|services)\b/i,
+      /\bjiofiber\b/i,
+      /\bSTNR[0-9]{4,}\b/i,
+      /\brjil\b/i,
+      /\bjio\.com\b/i,
+      /\b(?:www\.)?jio\.com\b/i,
     ],
   },
   {
@@ -617,8 +674,30 @@ export const KNOWN_BRANDS: KnownBrand[] = [
     category: 'Utilities & Cloud',
     patterns: [
       /\bbharti\s*airtel\b/i,
-      /\bairtel\s*xstream\b/i,
-      /\bairtel\s*broadband\b/i,
+      /\bairtel\s*(?:xstream|broadband|fiber|postpaid|prepaid|telecom|payments\s*bank)\b/i,
+      /\bairtel\.in\b/i,
+      /\bairtel\.com\b/i,
+    ],
+  },
+  {
+    id: 'vi',
+    canonicalName: 'Vodafone Idea (Vi)',
+    defaultServiceName: 'Vi Postpaid / Broadband',
+    category: 'Utilities & Cloud',
+    patterns: [
+      /\bvodafone\s*idea\b/i,
+      /\bvi\s*(?:postpaid|prepaid|broadband)\b/i,
+      /\bmyvi\.in\b/i,
+    ],
+  },
+  {
+    id: 'tataplay',
+    canonicalName: 'Tata Play Fiber',
+    defaultServiceName: 'Tata Play Fiber Broadband',
+    category: 'Utilities & Cloud',
+    patterns: [
+      /\btata\s*play\s*(?:fiber|broadband)?\b/i,
+      /\btata\s*teleservices\b/i,
     ],
   },
   {
@@ -684,8 +763,10 @@ export function getCanonicalMerchantName(raw: string): string {
   if (/digitalocean/i.test(lower)) return 'DigitalOcean';
   if (/atlassian|jira/i.test(lower)) return 'Atlassian';
   if (/linear/i.test(lower)) return 'Linear';
-  if (/jio/i.test(lower)) return 'Jio Fiber / Mobile';
+  if (/jio|reliance\s*jio|stnr\d|rjil/i.test(lower)) return 'Jio Fiber / Mobile';
   if (/airtel/i.test(lower)) return 'Airtel Xstream';
+  if (/vodafone|idea|\bvi\b/i.test(lower)) return 'Vodafone Idea (Vi)';
+  if (/tata\s*play/i.test(lower)) return 'Tata Play Fiber';
   if (/swiggy/i.test(lower)) return 'Swiggy One';
   if (/zomato/i.test(lower)) return 'Zomato Gold';
   if (/microsoft/i.test(lower)) return 'Microsoft';
@@ -703,17 +784,33 @@ export function extractLineItemService(text: string, merchantName: string): stri
   const clean = sanitizePdfExtractedText(text);
   const lines = clean.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0);
 
-  // 1. Look for line-item table headers
+  // 1. Explicit Plan / Subscription / Product label with inline value
+  const explicitLabels = [
+    /(?:subscription\s*(?:plan|name|tier)?|plan\s*(?:name|tier)?|membership|product\s*(?:name)?|service\s*name)[:\s]+([A-Za-z0-9\s+&/\\().-]{3,70})(?=\r?\n|$|,|;)/i,
+    /(?:description|item\s*description)[:\s]+([A-Za-z0-9\s+&/\\().-]{3,70})(?=\r?\n|$|,|;)/i,
+  ];
+  for (const regex of explicitLabels) {
+    const match = clean.match(regex);
+    if (match && match[1]) {
+      const candidate = match[1]
+        .replace(/([₹$€£]|inr|usd|eur|gbp)\s*[0-9]+(?:[.,][0-9]{2})?/gi, '')
+        .trim();
+      if (candidate.length >= 3 && candidate.length <= 70 && !/^(?:monthly|yearly|annual|active|verified|details|date|amount)$/i.test(candidate)) {
+        return candidate;
+      }
+    }
+  }
+
+  // 2. Standalone line-item table headers where the description is on subsequent rows
   const headerIdx = lines.findIndex((l) =>
-    /^(?:description|item|details|plan|product|subscription|service(?:\s*name)?)\b/i.test(l) ||
-    /\b(?:description|line\s*item)\b/i.test(l)
+    /^(?:description|item|line\s*item|particulars)\b/i.test(l) && l.length <= 30
   );
 
   if (headerIdx !== -1 && headerIdx + 1 < lines.length) {
     for (let i = headerIdx + 1; i < Math.min(lines.length, headerIdx + 6); i++) {
       const candidate = lines[i];
       if (/^[0-9]+$/.test(candidate) || /^[₹$€£0-9.,\s]+$/.test(candidate)) continue;
-      if (/^(?:subtotal|total|tax|gst|vat|discount|qty|quantity|amount|rate|unit\s*price|billing\s*period)/i.test(candidate)) continue;
+      if (/^(?:subtotal|total|tax|gst|vat|cgst|sgst|igst|discount|qty|quantity|amount|rate|unit\s*price|billing\s*period|zwischensumme|gesamtbetrag)/i.test(candidate)) continue;
       const cleanedDesc = candidate
         .replace(/([₹$€£]|inr|usd|eur|gbp)\s*[0-9]+(?:[.,][0-9]{2})?/gi, '')
         .replace(/\b(?:qty|quantity|hrs|hours|units?)\s*[:=]?\s*[0-9]+/gi, '')
@@ -722,15 +819,6 @@ export function extractLineItemService(text: string, merchantName: string): stri
       if (cleanedDesc.length >= 3 && cleanedDesc.length <= 60 && /[a-zA-Z]{3,}/.test(cleanedDesc)) {
         return cleanedDesc;
       }
-    }
-  }
-
-  // 2. Look for explicit Plan / Membership / Service label anywhere
-  const planMatch = clean.match(/(?:subscription(?:\s*to)?|plan(?:\s*name)?|membership|product(?:\s*name)?)[:\s]+([A-Za-z0-9\s+&/\\-]{3,50})(?=\r?\n|$|,|;)/i);
-  if (planMatch && planMatch[1]) {
-    const candidate = planMatch[1].trim();
-    if (!/^(?:monthly|yearly|annual|active|verified|id|number|details|date|amount)$/i.test(candidate)) {
-      return candidate;
     }
   }
 
@@ -826,6 +914,31 @@ export const GENERIC_DOCUMENT_TERMS: readonly string[] = [
   'sgst',
   'igst',
   'utgst',
+  'income tax',
+  'income tax department',
+  'income tax dept',
+  'central board of direct taxes',
+  'cbdt',
+  'central board of indirect taxes and customs',
+  'cbic',
+  'government of india',
+  'govt of india',
+  'govt. of india',
+  'department of revenue',
+  'department of telecommunications',
+  'ministry of finance',
+  'ministry of communications',
+  'internal revenue service',
+  'irs',
+  'hm revenue & customs',
+  'hmrc',
+  'goods and services tax network',
+  'gstn',
+  'tax department',
+  'reserve bank of india',
+  'rbi',
+  'telecom regulatory authority of india',
+  'trai',
 ];
 
 const GENERIC_KEYWORD_SET = new Set([
@@ -860,6 +973,11 @@ export function isValidMerchantName(name: string | null | undefined): boolean {
 
   // Cannot be a physical address or postal location line
   if (/\b(?:plot|street|road|rd\b|st\b|ave\b|avenue|floor|fl\b|suite|ste\b|block|bldg|building|tower|plaza|sector|cross|phase|pin\s*code|pincode|\b\d{5,6}\b)\b/i.test(trimmed)) {
+    return false;
+  }
+
+  // Cannot be a government statutory body, tax authority, or regulatory agency
+  if (/\b(?:income\s*tax(?:\s*department)?|central\s*board|board\s*of\s*direct\s*taxes|cbdt|cbic|ministry\s*of\s*(?:finance|communications|corporate\s*affairs)|department\s*of\s*(?:revenue|telecommunications)|government\s*of\s*india|govt\s*of\s*india|dept\s*of\s*telecom|reserve\s*bank\s*of\s*india|internal\s*revenue\s*service|irs|hm\s*revenue|hmrc|revenue\s*(?:&|and)\s*customs|tax\s*department|commercial\s*taxes)\b/i.test(trimmed)) {
     return false;
   }
 
@@ -903,7 +1021,7 @@ export function cleanMerchantCandidate(str: string): string | null {
     return null;
   }
   const stripped = str
-    .replace(/["'*<>~@!?^+=\\/|~`%$;:]+/g, ' ')
+    .replace(/["'*<>~@!?^+=\\/|~`%$;:.]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 
@@ -1229,7 +1347,7 @@ export function extractTotalAmountAndCurrency(
 
   // Regex targeting final totals, subtotals, and taxes
   const primaryTotalRegex = /(?:grand\s*total|final\s*amount\s*(?:due|paid|charged|payable)?|total\s*amount\s*(?:due|paid|charged|payable)?|total\s*invoice\s*value|invoice\s*value|total\s*value|gesamtbetrag|endbetrag|rechnungsbetrag|montant\s*total|total\s*payable|net\s*payable|final\s*total|amount\s*paid|paid\s*amount|amount\s*due|total\s*charged|total\s*billed|invoice\s*total|total\s*pay[eé]|total\s*[:=]|total\s+amt|\btotal\b|paid\s*[:=])(?:\s*\([^)]*\))?[:\s]*([₹$€£]|inr|usd|eur|gbp|rs\.?)?\s*([0-9]{1,3}(?:,[0-9]{2,3})+(?:\.[0-9]{1,2})?|[0-9]{1,3}(?:\.[0-9]{3})+(?:,[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?|[0-9]+(?:,[0-9]{1,2})?|[0-9]+)\s*([₹$€£]|inr|usd|eur|gbp|\/-)?/i;
-  const subtotalRegex = /(?:subtotal|sub-total|sub\s+total|net\s*subtotal|net\s*amount|nettobetrag|zwischensumme|sous-total|base\s*imponible|taxable\s*value)[:\s]*([₹$€£]|inr|usd|eur|gbp|rs\.?)?\s*([0-9]{1,3}(?:,[0-9]{2,3})+(?:\.[0-9]{1,2})?|[0-9]{1,3}(?:\.[0-9]{3})+(?:,[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?|[0-9]+(?:,[0-9]{1,2})?|[0-9]+)\s*([₹$€£]|inr|usd|eur|gbp|\/-)?/i;
+  const subtotalRegex = /(?:subtotal|sub-total|sub\s+total|net\s*subtotal|net\s*amount|nettobetrag|zwischensumme|sous-total|base\s*imponible|total\s*taxable(?:\s*value|\s*amount)?|taxable\s*value|taxable\s*amount|taxable\s*total|total\s*taxable|taxable)(?:\s*\([^)]*\))?[:\s]*([₹$€£]|inr|usd|eur|gbp|rs\.?)?\s*([0-9]{1,3}(?:,[0-9]{2,3})+(?:\.[0-9]{1,2})?|[0-9]{1,3}(?:\.[0-9]{3})+(?:,[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?|[0-9]+(?:,[0-9]{1,2})?|[0-9]+)\s*([₹$€£]|inr|usd|eur|gbp|\/-)?/i;
   const taxRegex = /(?:tax\s*total|total\s*tax|(?:total\s*)?tax|gst|igst|1gst|cgst\s*\+\s*sgst|cgst|sgst|vat|tva|ust|mwst|steuern?)(?:\s*(?:@|at)?\s*\(?[0-9]+%?\)?|\s*\([^)]*\))?[:\s]*([₹$€£]|inr|usd|eur|gbp|rs\.?)?\s*([0-9]{1,3}(?:,[0-9]{2,3})+(?:\.[0-9]{1,2})?|[0-9]{1,3}(?:\.[0-9]{3})+(?:,[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?|[0-9]+(?:,[0-9]{1,2})?|[0-9]+)\s*([₹$€£]|inr|usd|eur|gbp|\/-)?/i;
 
   // Pass 1: Line-by-line inspection with primary total labels
@@ -1281,8 +1399,10 @@ export function extractTotalAmountAndCurrency(
 
     // STRICT CHECK: Tax lines, subtotal lines, and intermediate totals are NEVER the Grand Total!
     // E.g. "TAX TOTAL ₹30.36" is the tax line, NOT the Grand Total "TOTAL ₹199"!
-    const isTaxOrSubtotalLine = /^(?:subtotal|sub-total|sub\s+total|net\s*subtotal|tax\s*total|total\s*tax|tax|igst|cgst|sgst|vat|taxable\s*value|discount|fee)\b/i.test(trimmed) ||
-      /\b(?:tax\s*total|total\s*tax|subtotal|sub-total|net\s*subtotal|tax\s*amount)\b/i.test(trimmed);
+    // E.g. "Total Taxable (Rs.) 599.00" is taxable subtotal, NOT Grand Total!
+    const isTaxOrSubtotalLine =
+      /^(?:subtotal|sub-total|sub\s+total|net\s*subtotal|tax\s*total|total\s*tax|tax|igst|cgst|sgst|vat|taxable\s*value|taxable\s*amount|total\s*taxable|taxable|discount|fee)\b/i.test(trimmed) ||
+      /\b(?:tax\s*total|total\s*tax|subtotal|sub-total|net\s*subtotal|tax\s*amount|total\s*taxable(?:\s*value|\s*amount)?|taxable\s*value|taxable\s*amount|taxable\s*total|net\s*taxable)\b/i.test(trimmed);
 
     if (isTaxOrSubtotalLine) {
       continue;
@@ -1293,11 +1413,17 @@ export function extractTotalAmountAndCurrency(
       continue;
     }
 
-    // Only inspect remaining lines as potential Grand Total lines
-    const isTotalCandidate = /(?:grand\s*total|gesamtbetrag|endbetrag|rechnungsbetrag|total\s*invoice\s*value|invoice\s*value|final\s*amount|total\s*amount|amount\s*paid|paid\s*amount|total\s*charged|total\s*paid|net\s*payable|total\s*payable|invoice\s*total|total\s*billed|amount\s*due|total\s*due|\btotal\b|paid\s*[:=])/i.test(trimmed);
+    // Explicit final total phrases carry highest precedence over ambiguous generic totals
+    const isExplicitGrandTotal = /(?:grand\s*total|gesamtbetrag|endbetrag|rechnungsbetrag|total\s*invoice\s*value|invoice\s*value|final\s*amount|total\s*amount(?:\s*due|\s*paid|\s*payable)?|amount\s*paid|paid\s*amount|total\s*charged|total\s*paid|net\s*payable|total\s*payable|invoice\s*total|total\s*billed)/i.test(trimmed);
+    const isGenericTotal = /(?:amount\s*due|total\s*due|\btotal\b|paid\s*[:=])/i.test(trimmed);
+    const isTotalCandidate = isExplicitGrandTotal || isGenericTotal;
+
+    const shouldConsiderCandidate =
+      !extractedTotal ||
+      (isExplicitGrandTotal && (totalConfidence < 98 || (extractedSubtotal !== null && extractedTotal <= extractedSubtotal)));
 
     // Final Total check on current line (with multi-amount row disambiguation)
-    if (!extractedTotal && isTotalCandidate) {
+    if (shouldConsiderCandidate && isTotalCandidate) {
       // Strip email addresses from the line so digits in emails (e.g. "38" in "chandrasekaran38@gmail.com") are never captured as amounts
       const lineWithoutEmails = trimmed.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, ' ');
 
@@ -1484,7 +1610,7 @@ export function extractTotalAmountAndCurrency(
   // Pass 2: Mathematical verification if Subtotal and Tax were found
   if (extractedSubtotal !== null && extractedTax !== null) {
     const mathTotal = Math.round((extractedSubtotal + extractedTax) * 100) / 100;
-    // Invariant: Subtotal + Tax = Total. If total was null or misidentified (e.g. 3036 instead of 199), correct it!
+    // Invariant: Subtotal + Tax = Total. If total was null or misidentified (e.g. equal to taxable subtotal, or missing tax), correct it!
     if (extractedTotal === null || Math.abs(extractedTotal - mathTotal) > 0.05) {
       const mathInt = Math.round(mathTotal);
       const textHasMathTotal = text.includes(String(mathInt)) || detectedAmounts.includes(mathInt) || detectedAmounts.includes(mathTotal);
@@ -1495,6 +1621,12 @@ export function extractTotalAmountAndCurrency(
         if (!detectedAmounts.includes(mathTotal)) detectedAmounts.push(mathTotal);
       }
     }
+  }
+
+  // Backfill tax if total and taxable subtotal are verified, but tax line had non-standard format
+  if (extractedTotal !== null && extractedSubtotal !== null && extractedTax === null && extractedTotal > extractedSubtotal) {
+    extractedTax = Math.round((extractedTotal - extractedSubtotal) * 100) / 100;
+    taxEvidence = `Computed Tax: ${extractedTotal} - ${extractedSubtotal} = ${extractedTax}`;
   }
 
   // Pass 3: Currency heuristics from full document if not explicitly extracted on the total line
@@ -1828,7 +1960,8 @@ export function extractPaymentMethod(text: string): ExtractedField<string> {
 export function extractInvoiceNumber(text: string): ExtractedField<string> {
   const clean = sanitizePdfExtractedText(text);
   const regexes = [
-    /(?:invoice\s*(?:number|no\.?|#|id)|inv\s*#|bill\s*(?:no\.?|#)|receipt\s*(?:no\.?|#))[:\s]*([a-zA-Z0-9\-_/]{4,30})\b/i,
+    /(?:tax\s*invoice\s*(?:number|no\.?|#|id)?|invoice\s*(?:number|no\.?|#|id)|inv\s*#|bill\s*(?:no\.?|#)|receipt\s*(?:no\.?|#))[:\s]*([a-zA-Z0-9\-_/]{4,30})\b/i,
+    /\b(STNR[0-9]{6,})\b/i,
     /#\s*([0-9]{5,15})\b/,
   ];
 
@@ -1868,7 +2001,7 @@ export function extractDatesAndPeriod(
   // 1. Cadence / Frequency
   let freq: 'monthly' | 'yearly' | 'quarterly' | 'weekly' | null = null;
   let freqEvidence: string | null = null;
-  if (/yearly|annual|annually|per\s*year|\/yr|\/year|12\s*months|\b1\s*year\b|billed\s*annually/i.test(clean)) {
+  if (/yearly|annual|annually|per\s*year|\/yr|\/year|12\s*months|\b1\s*year\b|billed\s*annually|jahres|jährlich/i.test(clean)) {
     freq = 'yearly';
     freqEvidence = 'Annual / Yearly frequency detected';
   } else if (/monthly|per\s*month|\/mo|\/month|billed\s*monthly/i.test(clean)) {
@@ -2167,5 +2300,48 @@ export async function processInvoiceDocument(
     pagesText,
     warnings,
     detectedAmounts: amountInfo.detectedAmounts,
+    universalExtraction: {
+      merchant_name: merchantInfo.merchantName.value,
+      service_name: merchantInfo.serviceName.value,
+      invoice_number: invoiceNumberInfo.value,
+      subscription_amount: amountInfo.subtotal.value || amountInfo.totalAmount.value,
+      subtotal: amountInfo.subtotal.value,
+      tax_amount: amountInfo.taxAmount.value,
+      total_amount: amountInfo.totalAmount.value,
+      currency: amountInfo.currency.value,
+      payment_method: normalizePaymentMethod(paymentMethodInfo.value),
+      billing_cycle: (datesInfo.billingFrequency.value as any) || 'unknown',
+      invoice_date: datesInfo.invoiceDate.value,
+      payment_date: datesInfo.invoiceDate.value,
+      due_date: null,
+      billing_period_start: datesInfo.billingPeriod.value ? datesInfo.billingPeriod.value.split(/\s*(?:to|-|through)\s*/i)[0] || null : null,
+      billing_period_end: datesInfo.billingPeriod.value ? datesInfo.billingPeriod.value.split(/\s*(?:to|-|through)\s*/i)[1] || null : null,
+      next_renewal_date: datesInfo.renewalDate.value,
+      is_renewal_date_derived: Boolean(datesInfo.renewalDate.evidenceText?.includes('Derived')),
+      fields_confidence: {
+        merchant_name: (merchantInfo.merchantName.confidence || 0) / 100,
+        service_name: (merchantInfo.serviceName.confidence || 0) / 100,
+        total_amount: (amountInfo.totalAmount.confidence || 0) / 100,
+        subscription_amount: (amountInfo.subtotal.confidence || amountInfo.totalAmount.confidence || 0) / 100,
+        currency: (amountInfo.currency.confidence || 0) / 100,
+        payment_method: (paymentMethodInfo.confidence || 0) / 100,
+        billing_cycle: (datesInfo.billingFrequency.confidence || 0) / 100,
+        invoice_date: (datesInfo.invoiceDate.confidence || 0) / 100,
+        next_renewal_date: (datesInfo.renewalDate.confidence || 0) / 100,
+      },
+      field_evidence: {
+        merchant_name: merchantInfo.merchantName.evidenceText || undefined,
+        service_name: merchantInfo.serviceName.evidenceText || undefined,
+        total_amount: amountInfo.totalAmount.evidenceText || undefined,
+        payment_method: paymentMethodInfo.evidenceText || undefined,
+        billing_cycle: datesInfo.billingFrequency.evidenceText || undefined,
+        next_renewal_date: datesInfo.renewalDate.evidenceText || undefined,
+      },
+      extraction_status:
+        merchantInfo.merchantName.status === 'high' && amountInfo.totalAmount.status === 'high'
+          ? 'verified'
+          : (!merchantInfo.merchantName.value || !amountInfo.totalAmount.value ? 'manual_input_required' : 'needs_review'),
+      raw_text: docCombinedText.slice(0, 500),
+    },
   };
 }

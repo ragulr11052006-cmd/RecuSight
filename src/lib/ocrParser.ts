@@ -1,6 +1,15 @@
 import { createWorker } from 'tesseract.js';
 import { SubscriptionCategory, Currency } from '../types';
-import { processInvoiceDocument, InvoiceExtractionResult, sanitizePdfExtractedText, identifyMerchant, isValidMerchantName, cleanMerchantCandidate } from './invoiceExtractor';
+import {
+  processInvoiceDocument,
+  InvoiceExtractionResult,
+  UniversalInvoiceExtraction,
+  sanitizePdfExtractedText,
+  identifyMerchant,
+  isValidMerchantName,
+  cleanMerchantCandidate,
+  normalizePaymentMethod,
+} from './invoiceExtractor';
 
 export interface ParsedTransaction {
   merchantName: string;
@@ -11,7 +20,7 @@ export interface ParsedTransaction {
   date: string | null;
   renewalDate?: string | null;
   paymentSource?: string | null;
-  cadence: 'monthly' | 'yearly' | 'annually' | 'quarterly' | 'custom' | 'unknown';
+  cadence: 'monthly' | 'yearly' | 'annually' | 'quarterly' | 'weekly' | 'custom' | 'unknown';
   category: SubscriptionCategory;
   confidence: number;
   isDuplicate: boolean;
@@ -27,6 +36,13 @@ export interface ParsedTransaction {
   extractionResult?: InvoiceExtractionResult;
   amountEvidence?: string | null;
   merchantEvidence?: string | null;
+  serviceName?: string | null;
+  subscriptionAmount?: number | null;
+  isRenewalDateDerived?: boolean;
+  fieldsConfidence?: Record<string, number>;
+  fieldEvidence?: Record<string, string>;
+  extractionStatus?: 'verified' | 'needs_review' | 'manual_input_required';
+  universalResult?: UniversalInvoiceExtraction;
 }
 
 // Exchange rates for live currency switching
@@ -427,10 +443,13 @@ export async function parseDocument(
       if (res.ok) {
         const json = await res.json();
         if (json.success && json.data) {
-          const doc = json.data;
-          const currency = (doc.currency as Currency) || userPreferredCurrency;
-          let hasValidMerchant = Boolean(doc.merchantName && isValidMerchantName(doc.merchantName));
-          let merchantName = hasValidMerchant ? doc.merchantName : '';
+          const doc: UniversalInvoiceExtraction & any = json.data;
+          const currency = ((doc.currency || doc.currencyCode) as Currency) || userPreferredCurrency;
+          let hasValidMerchant = Boolean(
+            (doc.merchant_name && isValidMerchantName(doc.merchant_name)) ||
+            (doc.merchantName && isValidMerchantName(doc.merchantName))
+          );
+          let merchantName = hasValidMerchant ? (doc.merchant_name || doc.merchantName) : '';
 
           // If Document AI did not identify the merchant name for an unknown commodity,
           // extract the authentic merchant name from the local invoice document!
@@ -446,11 +465,26 @@ export async function parseDocument(
             }
           }
 
-          const confidence = doc.confidence !== undefined ? doc.confidence : (hasValidMerchant ? 85 : 40);
+          const rawConfidence = doc.fields_confidence?.total_amount
+            ? Math.round(doc.fields_confidence.total_amount * 100)
+            : (doc.confidence !== undefined ? doc.confidence : (hasValidMerchant ? 85 : 40));
+
+          const finalAmount = doc.total_amount !== undefined && doc.total_amount !== null
+            ? doc.total_amount
+            : (doc.totalAmount ?? null);
+
           const amountStatus: 'verified' | 'uncertain' | 'not_found' =
-            doc.totalAmount === null || doc.totalAmount === undefined
+            finalAmount === null || finalAmount === undefined
               ? 'not_found'
-              : (confidence >= 75 && hasValidMerchant ? 'verified' : 'uncertain');
+              : (rawConfidence >= 75 && hasValidMerchant ? 'verified' : 'uncertain');
+
+          const finalCadence = (doc.billing_cycle && doc.billing_cycle !== 'unknown'
+            ? doc.billing_cycle
+            : (doc.cadence && doc.cadence !== 'unknown' ? doc.cadence : 'unknown')) as ParsedTransaction['cadence'];
+
+          const finalPaymentMethod = doc.payment_method && doc.payment_method !== 'Unknown'
+            ? doc.payment_method
+            : (doc.paymentMethod || undefined);
 
           if (onProgress) onProgress('Google Cloud Document AI parsing complete!');
           return [
@@ -459,23 +493,32 @@ export async function parseDocument(
               rawString: hasValidMerchant
                 ? `${merchantName.toUpperCase().replace(/\s+/g, '_')}*DOC_AI_VERIFIED`
                 : 'UNIDENTIFIED_PROVIDER*DOC_AI_REVIEW',
-              amount: doc.totalAmount ?? null,
+              amount: finalAmount,
               amountStatus,
               currency,
-              date: doc.invoiceDate ?? null,
-              renewalDate: doc.renewalDate ?? null,
-              paymentSource: doc.paymentMethod || undefined,
-              cadence: doc.cadence || 'unknown',
+              date: doc.invoice_date || doc.invoiceDate || null,
+              renewalDate: doc.next_renewal_date || doc.renewalDate || null,
+              paymentSource: finalPaymentMethod,
+              cadence: finalCadence,
               category: hasValidMerchant ? detectCategoryFromText(merchantName) : 'Software & Tools',
-              confidence,
+              confidence: rawConfidence,
               isDuplicate: false,
               isRecurring: true,
               notes: !hasValidMerchant
                 ? 'Service provider could not be identified automatically by Document AI. Please confirm merchant name.'
-                : (doc.needsReview ? 'Please review extracted values before confirming.' : 'Extracted via Google Cloud Document AI Invoice Parser'),
-              detectedAmounts: doc.totalAmount ? [doc.totalAmount] : [],
-              subtotal: doc.subtotal,
-              taxAmount: doc.taxAmount,
+                : (doc.extraction_status === 'needs_review' ? 'Please review extracted values before confirming.' : 'Extracted via Google Cloud Document AI Invoice Parser'),
+              detectedAmounts: finalAmount !== null ? [finalAmount] : [],
+              subtotal: doc.subtotal ?? undefined,
+              taxAmount: doc.tax_amount ?? doc.taxAmount ?? undefined,
+              serviceName: doc.service_name || null,
+              subscriptionAmount: doc.subscription_amount ?? doc.subtotal ?? finalAmount,
+              isRenewalDateDerived: Boolean(doc.is_renewal_date_derived),
+              fieldsConfidence: doc.fields_confidence,
+              fieldEvidence: doc.field_evidence,
+              extractionStatus: doc.extraction_status,
+              universalResult: doc,
+              amountEvidence: doc.field_evidence?.total_amount,
+              merchantEvidence: doc.field_evidence?.merchant_name,
             },
           ];
         }
@@ -495,11 +538,15 @@ export async function parseDocument(
   const renewalDate = extraction.renewalDate.value;
   const date = extraction.invoiceDate.value;
   const paymentSource = extraction.paymentMethod.value;
-  const cadence: 'monthly' | 'yearly' | 'unknown' =
+  const cadence: ParsedTransaction['cadence'] =
     extraction.billingFrequency.value === 'yearly'
       ? 'yearly'
       : extraction.billingFrequency.value === 'monthly'
       ? 'monthly'
+      : extraction.billingFrequency.value === 'quarterly'
+      ? 'quarterly'
+      : extraction.billingFrequency.value === 'weekly'
+      ? 'weekly'
       : 'unknown';
 
   const merchantConfidence = hasValidMerchant ? (extraction.merchantName.confidence || 75) : 0;
@@ -544,6 +591,13 @@ export async function parseDocument(
     extractionResult: extraction,
     amountEvidence: extraction.totalAmount.evidenceText,
     merchantEvidence: extraction.merchantName.evidenceText,
+    serviceName: extraction.serviceName.value,
+    subscriptionAmount: extraction.subtotal.value || extraction.totalAmount.value,
+    isRenewalDateDerived: extraction.universalExtraction?.is_renewal_date_derived,
+    fieldsConfidence: extraction.universalExtraction?.fields_confidence,
+    fieldEvidence: extraction.universalExtraction?.field_evidence,
+    extractionStatus: extraction.universalExtraction?.extraction_status,
+    universalResult: extraction.universalExtraction,
   };
 
   return [primaryTx];
