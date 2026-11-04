@@ -40,7 +40,7 @@ interface ExtractedCandidate {
   amount: number | null;
   currency: string;
   date: string | null;
-  cadence: 'monthly' | 'yearly' | 'annually' | 'quarterly' | 'custom' | 'unknown';
+  cadence: 'monthly' | 'yearly' | 'annually' | 'quarterly' | 'weekly' | 'custom' | 'unknown';
   category: SubscriptionCategory;
   confidence: number;
   isDuplicate: boolean;
@@ -49,6 +49,11 @@ interface ExtractedCandidate {
   selected: boolean;
   paymentSource?: string;
   amountEvidence?: string | null;
+  serviceName?: string | null;
+  isRenewalDateDerived?: boolean;
+  subtotal?: number;
+  taxAmount?: number;
+  extractionStatus?: string;
 }
 
 export const AddUploadInvoice: React.FC = () => {
@@ -159,6 +164,11 @@ export const AddUploadInvoice: React.FC = () => {
           selected: idx === 0,
           paymentSource: item.paymentSource || undefined,
           amountEvidence: item.amountEvidence,
+          serviceName: item.serviceName,
+          isRenewalDateDerived: item.isRenewalDateDerived,
+          subtotal: item.subtotal,
+          taxAmount: item.taxAmount,
+          extractionStatus: item.extractionStatus,
         }));
         setCandidates(mapped);
         setSelectedCandidate(mapped[0]);
@@ -577,6 +587,11 @@ export const AddUploadInvoice: React.FC = () => {
                     <h3 className="text-lg font-extrabold text-slate-900 dark:text-white mt-1">
                       {selectedCandidate.merchantName}
                     </h3>
+                    {selectedCandidate.serviceName && selectedCandidate.serviceName !== selectedCandidate.merchantName && (
+                      <p className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 mt-0.5">
+                        Plan / Service: {selectedCandidate.serviceName}
+                      </p>
+                    )}
                     <p className="text-xs text-slate-400 font-mono mt-0.5">
                       Identified via transaction string '{selectedCandidate.rawString}'
                     </p>
