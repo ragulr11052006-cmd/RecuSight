@@ -5,21 +5,23 @@ import { createClient } from '@supabase/supabase-js';
 async function sendFast2SMS(phone, message) {
   const apiKey = process.env.FAST2SMS_API_KEY;
   if (!apiKey) {
-    return { success: false, reason: 'FAST2SMS_API_KEY not configured in environment' };
+    return { success: false, reason: 'FAST2SMS_API_KEY not configured in environment variables' };
   }
 
   // Extract clean 10-digit Indian mobile number
   const cleanPhone = String(phone).replace(/\D/g, '').slice(-10);
   if (cleanPhone.length !== 10) {
-    return { success: false, reason: `Invalid 10-digit phone number: ${phone}` };
+    return { success: false, reason: `Invalid 10-digit Indian phone number: ${phone}` };
   }
 
   try {
-    const response = await fetch('https://www.fast2sms.com/dev/bulkV2', {
+    const url = `https://www.fast2sms.com/dev/bulkV2?authorization=${encodeURIComponent(apiKey.trim())}`;
+    const response = await fetch(url, {
       method: 'POST',
       headers: {
         authorization: apiKey.trim(),
         'Content-Type': 'application/json',
+        accept: 'application/json',
       },
       body: JSON.stringify({
         route: 'q',
@@ -31,13 +33,18 @@ async function sendFast2SMS(phone, message) {
     });
 
     const result = await response.json();
+    console.log(`[Fast2SMS Gateway] Response for ${cleanPhone}:`, JSON.stringify(result));
+    
+    const isSuccess = result.return === true;
     return {
-      success: result.return === true,
+      success: isSuccess,
       messageId: result.request_id || null,
+      reason: isSuccess ? 'Delivered via Fast2SMS' : (Array.isArray(result.message) ? result.message.join(', ') : result.message || 'Fast2SMS dispatch error'),
       raw: result,
     };
   } catch (err) {
-    return { success: false, error: err.message };
+    console.error('[Fast2SMS Network Error]:', err);
+    return { success: false, reason: `Fast2SMS network error: ${err.message}` };
   }
 }
 
@@ -59,22 +66,22 @@ export default async function handler(req, res) {
   const gmailUser = process.env.GMAIL_USER;
   const rawPass = process.env.GMAIL_APP_PASSWORD;
   const gmailPass = rawPass ? rawPass.replace(/\s+/g, '') : '';
+  const fast2SmsKey = process.env.FAST2SMS_API_KEY;
 
-  if (!gmailUser || !gmailPass) {
-    return res.status(400).json({
-      success: false,
-      error: 'Gmail credentials not configured. Please set GMAIL_USER and GMAIL_APP_PASSWORD in environment variables.',
+  const hasEmailConfig = !!(gmailUser && gmailPass);
+  const hasSMSConfig = !!fast2SmsKey;
+
+  // Create Nodemailer Transporter if Gmail is configured
+  let transporter = null;
+  if (hasEmailConfig) {
+    transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: gmailUser,
+        pass: gmailPass,
+      },
     });
   }
-
-  // Create Nodemailer Transporter using Gmail SMTP
-  const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: gmailUser,
-      pass: gmailPass,
-    },
-  });
 
   // 1. DIRECT ACTIVE ALERTS MODE: Frontend sends nearing renewals (2 days / 7 days before)
   const incomingAlerts = req.body?.alerts || [];
@@ -83,6 +90,7 @@ export default async function handler(req, res) {
 
     for (const alert of incomingAlerts) {
       const targetEmail = alert.target_email || gmailUser;
+      const targetPhone = alert.target_phone || null;
       const merchant = alert.merchant_name || 'Active Subscription';
       const amount = alert.amount ? `${alert.currency || 'INR'} ${alert.amount}` : 'recurring charge';
       const nextDate = alert.next_billing_date || 'Upcoming';
@@ -146,38 +154,69 @@ export default async function handler(req, res) {
             </div>
 
             <div style="margin-top: 28px; padding-top: 16px; border-top: 1px solid #f1f5f9; text-align: center; font-size: 11px; color: #94a3b8;">
-              RecurSight Automated Subscription & Mandate Watchdog • Delivery channel: Verified Email
+              RecurSight Automated Subscription & Mandate Watchdog • Delivery channel: Verified Channels
             </div>
           </div>
         </body>
         </html>
       `;
 
-      try {
-        const info = await transporter.sendMail({
-          from: `"RecurSight Watchdog" <${gmailUser}>`,
-          to: targetEmail,
-          subject,
-          html: htmlContent,
-        });
+      let emailStatus = 'skipped';
+      let emailError = null;
+      let emailMessageId = null;
 
-        let smsStatus = 'none';
-        if (alert.target_phone) {
-          const smsText = `🚨 RecurSight Alert: ${merchant} renews in ${daysLeft === 0 ? 'Today' : daysLeft === 1 ? '1 day' : daysLeft + ' days'} (${amount}). AutoPay active. Check dashboard to review or cancel.`;
-          const smsRes = await sendFast2SMS(alert.target_phone, smsText);
-          if (smsRes.success) {
-            smsStatus = 'sent';
-            console.log(`[Fast2SMS] Successfully delivered live SMS to ${alert.target_phone}`);
-          } else {
-            smsStatus = smsRes.reason || 'simulated';
-            console.log(`[RecurSight SMS Gateway] ${smsRes.reason || 'Simulated dispatch'} for ${alert.target_phone}`);
-          }
+      // Independent Email Dispatch
+      if (transporter && targetEmail) {
+        try {
+          const info = await transporter.sendMail({
+            from: `"RecurSight Watchdog" <${gmailUser}>`,
+            to: targetEmail,
+            subject,
+            html: htmlContent,
+          });
+          emailStatus = 'sent';
+          emailMessageId = info.messageId;
+        } catch (err) {
+          emailStatus = 'failed';
+          emailError = err.message;
+          console.error(`[Email Dispatch Error for ${merchant}]:`, err.message);
         }
+      } else if (!hasEmailConfig) {
+        emailStatus = 'no_gmail_config';
+      }
 
-        sentResults.push({
-          merchant,
-          targetEmail,
-          targetPhone: alert.target_phone || null,
+      // Independent SMS Dispatch (Never blocked by email)
+      let smsStatus = 'skipped';
+      let smsReason = null;
+      if (targetPhone) {
+        const smsText = `🚨 RecurSight Alert: ${merchant} renews in ${daysLeft === 0 ? 'Today' : daysLeft === 1 ? '1 day' : daysLeft + ' days'} (${amount}). AutoPay active. Check dashboard to review or cancel.`;
+        const smsRes = await sendFast2SMS(targetPhone, smsText);
+        smsStatus = smsRes.success ? 'sent' : 'failed';
+        smsReason = smsRes.reason || null;
+      }
+
+      sentResults.push({
+        merchant,
+        targetEmail,
+        targetPhone,
+        emailStatus,
+        emailMessageId,
+        emailError,
+        smsStatus,
+        smsReason,
+        daysLeft,
+        status: (emailStatus === 'sent' || smsStatus === 'sent') ? 'sent' : 'partial',
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      hasEmailConfig,
+      hasSMSConfig,
+      dispatchedCount: sentResults.filter((r) => r.status === 'sent').length,
+      results: sentResults,
+    });
+  }
           smsStatus,
           messageId: info.messageId,
           daysLeft,
@@ -287,8 +326,8 @@ export default async function handler(req, res) {
           }
         }
 
-        // Dispatch Email if email channel or default
-        if (reminder.delivery_channel !== 'sms') {
+        // Dispatch Email if email channel or default and transporter is configured
+        if (transporter && reminder.delivery_channel !== 'sms') {
           await transporter.sendMail(mailOptions);
         }
 
